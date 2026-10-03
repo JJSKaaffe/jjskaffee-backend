@@ -1,0 +1,11 @@
+SPIKE-02: Validación de tiempo de respuesta de proveedores de IA
+
+Relacionado con: ADR-0008, ADR-0011
+
+Estado: ⚠️ Código validado funcionalmente; pendiente de prueba con crédito/API key activos
+
+Resultado: El script de comparación (Claude, OpenAI, Gemini) se ejecutó correctamente a nivel de código, pero las tres cuentas de prueba presentaron bloqueos de facturación o credenciales inválidas (saldo agotado en Claude y OpenAI, API key inválida en Gemini), impidiendo obtener una respuesta real de contenido generado.
+
+Conclusión parcial: La arquitectura de la prueba es correcta y reutilizable; falta resolver la configuración de facturación/credenciales de al menos un proveedor para obtener la medición real de tiempo de respuesta y calidad de la explicación generada.
+
+Decisión final: Pendiente — se recomienda habilitar crédito mínimo en un proveedor (sugerido: Google Gemini, por su nivel gratuito) antes de dar este spike por completamente cerrado.

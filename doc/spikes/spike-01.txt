@@ -1,0 +1,15 @@
+SPIKE-01: Selección de proveedor de autenticación externa
+
+Relacionado con: ADR-0001
+
+Estado: ✅ Validado con evidencia real de ejecución
+
+Resultado:
+
+Registro de usuario de prueba en Firebase Authentication: 1.181ms
+Asignación de id_cafeteria mediante custom claim: 427ms
+Generación de token de sesión: 1ms
+
+Conclusión: Firebase Authentication soporta el modelo multi-tenant mediante custom claims, sin necesitar tablas adicionales para asociar un usuario a su cafetería. El flujo completo (crear → asignar → generar token → eliminar) se ejecutó sin errores.
+
+Decisión final: Firebase Authentication confirmado como proveedor de autenticación.

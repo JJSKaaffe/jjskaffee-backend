@@ -1,0 +1,15 @@
+SPIKE-03: Validación del aislamiento de datos multi-tenant
+
+Relacionado con: ADR-0001
+
+Estado: ✅ Validado con evidencia real de ejecución
+
+Resultado:
+
+Primer intento (conectado como superusuario postgres): la consulta devolvió las 4 filas de ambas cafeterías — reveló que Row Level Security no aplica automáticamente al dueño de la tabla.
+Corrección aplicada: ALTER TABLE movimientos FORCE ROW LEVEL SECURITY + creación de un usuario de aplicación limitado (app_jjskaffee) sin privilegios de superusuario.
+Segundo intento (conectado como app_jjskaffee, con SET app.current_cafeteria = '1'): la consulta devolvió únicamente las filas de la Cafetería 1, confirmando el aislamiento correcto.
+
+Conclusión: El mecanismo de aislamiento (filtro por id_cafeteria + Row Level Security forzado) funciona correctamente cuando se prueba con un usuario de aplicación real, que es el escenario representativo de cómo operará el sistema en producción.
+
+Decisión final: Diseño de aislamiento confirmado. Se agrega como práctica obligatoria de desarrollo: la aplicación en producción debe conectarse a la base de datos con un usuario limitado (nunca con el superusuario), y toda tabla con datos multi-tenant debe usar FORCE ROW LEVEL SECURITY.

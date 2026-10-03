@@ -1,0 +1,21 @@
+SPIKE-04: Selección de proveedor de notificaciones en tiempo real
+
+Relacionado con: ADR-0005, ADR-0011
+
+Estado: ✅ Validado con evidencia real de ejecución (extremo a extremo)
+
+Resultado:
+
+Tiempo de envío (servidor → Firebase Cloud Messaging): 778ms
+Latencia total end-to-end (evento → recepción en el navegador, pestaña en primer plano): 751ms
+Entrega confirmada también en segundo plano, como notificación nativa del sistema operativo (evidencia visual capturada)
+
+Incidencias resueltas durante la prueba:
+
+Archivo firebase-messaging-sw.js (service worker) faltante — se creó y ubicó en la raíz del sitio
+Discrepancia de un carácter en la apiKey copiada entre archivos — corregida
+Incompatibilidad de sintaxis con firebase-admin v14 (API modular) — actualizado el código a require('firebase-admin/app') y require('firebase-admin/messaging')
+
+Conclusión: Ambas métricas de latencia están muy por debajo de la meta establecida (5.000-10.000ms), con un margen de aproximadamente 6.6 veces.
+
+Decisión final: Firebase Cloud Messaging confirmado como proveedor de notificaciones.

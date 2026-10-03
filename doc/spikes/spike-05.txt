@@ -1,0 +1,9 @@
+SPIKE-05: Evaluación de pasarela de pagos y monetización
+
+Relacionado con: ADR-0011
+
+Estado: ❌ Descartado — fuera de alcance
+
+Motivo: El equipo decidió que el registro de ingresos y egresos del negocio del cliente será manual dentro del sistema, y que el cobro de la monetización del propio producto (suscripción/créditos) se gestionará por fuera del sistema. No se requiere integración con pasarela de pagos en esta etapa.
+
+Decisión final: Spike no ejecutado, decisión documentada en ADR-0011 actualizado.

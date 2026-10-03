@@ -1,0 +1,18 @@
+SPIKE-06: Prueba de rendimiento con volumen simulado de movimientos
+
+Relacionado con: ADR-0004
+
+Estado: ✅ Validado con evidencia real de ejecución (dos escalas de volumen probadas)
+
+Resultado — Volumen inicial (10.000 movimientos):
+
+Sin índices: 8ms | Con índices: 8ms | Sin diferencia medible (ambos muy por debajo de la meta)
+
+Resultado — Volumen mayor (200.000 movimientos, 2 años simulados):
+
+Dashboard (30 días): sin índices 83ms → con índices 8ms (mejora del 90%)
+Reporte anual completo: sin índices 128ms → con índices 132ms (sin diferencia real, consulta de agregación total)
+
+Conclusión: La estrategia de índices aporta su mayor beneficio en consultas selectivas de uso frecuente (dashboard), mientras que las consultas de agregación total del historial completo no se benefician de los índices, pero igualmente cumplen la meta con amplio margen.
+
+Decisión final: Estrategia de consultas agregadas con índices confirmada. Se establece monitoreo futuro si el volumen supera ampliamente los 200.000 movimientos por cliente.
