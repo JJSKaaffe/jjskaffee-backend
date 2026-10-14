@@ -12,8 +12,9 @@ Alcance: RF14 (egresos), RF18 (categorías), RF24–RF27 (ventas con adiciones),
 | | `servicios.input.ports` | Puertos de entrada (interfaces): `RegistrarIngresoUseCase`, `RegistrarEgresoUseCase`, `ConsultarMovimientosUseCase` | |
 | | `servicios.input.dto.request` / `.response` | `IngresoRequest`, `ItemRequest`, `AdicionRequest`, `EgresoRequest`, `FiltroMovimientosRequest` / `IngresoResponse`, `ItemResponse`, `AdicionResponse`, `EgresoResponse`, `MovimientoResponse`, `MovimientosResponse`, `TotalesResponse` | |
 | | `servicios.output.ports` | Puertos de salida (interfaces): `VentaRepository`, `EgresoRepository`, `CatalogoRepository`, `MovimientoRepository`, `UnidadDeTrabajo`, `VerificadorDeToken` | |
-| Infraestructura | `infraestructura.input` | Adaptadores de entrada (controllers, filtros) — **por construir** | Servicios, Dominio, Transversal |
-| | `infraestructura.output` | Adaptadores de salida (PostgreSQL, Firebase, secretos) — **por construir** | |
+| Infraestructura | `infraestructura.input` | Adaptadores de entrada: `MovimientosController`, `ManejadorDeErrores`, `FirebaseAuthFilter` | Servicios, Dominio, Transversal |
+| | `infraestructura.output` | Adaptadores de salida: repositorios `Pg*`, `PgUnidadDeTrabajo`, `FirebaseAuthAdapter` (secretos: pendiente) | |
+| | `infraestructura.configuracion` | `BeanConfig` (crea casos de uso y adaptadores), `FirebaseConfig`, `CorsConfig` | |
 | Transversal | `transversal` | Utilidades comunes (opcional) | — |
 
 ## Reglas que verifica ArchUnit (`ArquitecturaTest`) — no romperlas
@@ -25,17 +26,23 @@ Alcance: RF14 (egresos), RF18 (categorías), RF24–RF27 (ventas con adiciones),
 6. Sin ciclos entre paquetes.
 7. **Sin JPA** en ningún lado: persistencia con **JDBC (`JdbcTemplate`)**.
 
-## Adaptadores previstos en el diagrama (pendientes)
+## Adaptadores
 **Entrada**
-- `MovimientosController` (`@RestController`): `POST /ingresos`, `POST /egresos`, `GET /movimientos` (expuestos por el API Gateway como `/api/ingresos`, `/api/egresos`).
-- `FirebaseAuthFilter`: lee el token JWT del header, lo valida con `VerificadorDeToken` y produce `UsuarioAutenticado`.
+- `MovimientosController` (`@RestController`), expuesto por el API Gateway con el prefijo `/api`:
+  - `POST /ingresos` → 201 `IngresoResponse`
+  - `POST /ingresos/{idVenta}/deshacer` → 204
+  - `POST /egresos` → 201 `EgresoResponse`
+  - `GET /movimientos?desde&hasta&tipo&idCategoria&pagina&tamano` → 200 `MovimientosResponse` (página ≤ 50 y totales de todo el filtro)
+- `FirebaseAuthFilter`: exige `Authorization: Bearer <token>`, lo valida con `VerificadorDeToken` y deja `UsuarioAutenticado` en la petición; sin token válido responde 401.
+- `ManejadorDeErrores`: ProblemDetail (RFC 9457). 400 datos inválidos (con `errores` por campo), 401, 403 `SinPermisoException`, 404 `RecursoNoEncontradoException`, 422 `ReglaNegocioException`, 500 sin detalles internos.
 
 **Salida**
-- `PgVentaRepository`, `PgEgresoRepository`, `PgCatalogoRepository` (y el de movimientos): JDBC sobre PostgreSQL.
-- `PgUnidadDeTrabajo`: abre la transacción y ejecuta `set_config` de la cafetería para RLS.
-- `FirebaseAuthAdapter` (implementa `VerificadorDeToken`) y `SecretsProvider` (Google Cloud Secret Manager).
+- `PgVentaRepository`, `PgEgresoRepository`, `PgCatalogoRepository`, `PgMovimientoRepository` (totales con `SUM ... FILTER` y página con `LIMIT/OFFSET` sobre `v_movimiento`): JDBC sobre PostgreSQL.
+- `PgUnidadDeTrabajo`: abre la transacción y ejecuta `set_config('app.current_cafeteria', id, true)` para RLS.
+- `FirebaseAuthAdapter` (implementa `VerificadorDeToken`): verifica el token, toma `id_cafeteria` del claim y busca `id`, `nombre` y `rol` en la tabla `usuarios` (con RLS de esa cafetería, solo usuarios activos).
+- Pendiente: `SecretsProvider` (Google Cloud Secret Manager) con el perfil `gcp`.
 
-**Externos**: PostgreSQL en Cloud SQL (tablas `venta`, `detalle_venta`, `egreso`, `categoria`, `producto`, `producto_adicion`… con RLS por cafetería), Firebase Authentication, Google Cloud Secret Manager.
+**Externos**: PostgreSQL en Cloud SQL (tablas `cafeteria`, `usuarios`, `venta`, `detalle_venta`, `egreso`, `categoria`, `producto`, `producto_adicion` con RLS por cafetería; esquema en `db/02_esquema.sql`, seeds de prueba en `db/03` y `db/04`), Firebase Authentication, Google Cloud Secret Manager.
 
 ## Recorrido: registrar un egreso
 1. El administrador llena el formulario (Vue 3).
@@ -56,11 +63,12 @@ Alcance: RF14 (egresos), RF18 (categorías), RF24–RF27 (ventas con adiciones),
 ## Reglas de negocio implementadas en el dominio
 - **Venta** (ingreso): la pueden registrar cajero y administrador. Total = Σ(producto base + adiciones) calculado **siempre en el servidor con precios del catálogo**; nunca se acepta un total del navegador. El base debe ser `BASE` y estar disponible; cada adición debe ser `ADICION`, disponible y permitida para ese base (`producto_adicion`); cantidades ≥ 1; una venta sin productos no se registra. Adiciones repetidas se suman. **Deshacer**: solo quien la registró, dentro de 60 s, si no estaba anulada; después la anula el administrador.
 - **Egreso**: solo el **administrador**; monto > 0; categoría de egreso y activa; descripción obligatoria (máx. 200); comprobante opcional (máx. 50).
-- **Consulta de movimientos**: `desde` ≤ `hasta`; el administrador ve todo; el cajero **solo lo que él registró**; devuelve lista y totales (ingresos, egresos, balance).
+- **Consulta de movimientos** (`FiltroMovimientos`): `desde` ≤ `hasta` (fechas en hora de Colombia, `hasta` incluye el día completo); página ≥ 0 y tamaño 1–50 (por defecto 20); filtros por tipo y categoría; el administrador ve todo; el cajero **solo lo que él registró**; devuelve la página y los totales (ingresos, egresos, balance) de todo el filtro, calculados con SQL.
 - Patrones: entidades con fábrica (`crear` / `registrar`) que valida, y `reconstruir` para el repositorio; IDs `UUID`; dinero en `BigDecimal`; tiempo con `Instant` y `Clock` inyectado.
 
 ## Pruebas existentes
-`dominio/VentaTest`, `dominio/EgresoTest`, `servicios/casouso/{RegistrarIngreso,RegistrarEgreso,ConsultarMovimientos}Test` con `RepositoriosEnMemoria` (fakes de los puertos), `DatosPrueba` y `ArquitecturaTest`.
+- Unitarias (`./mvnw test`): `dominio/{Venta,Egreso,FiltroMovimientos}Test`, `servicios/casouso/{RegistrarIngreso,RegistrarEgreso,ConsultarMovimientos}Test` con `RepositoriosEnMemoria` (fakes de los puertos), `FirebaseAuthFilterTest`, `FirebaseAuthAdapterTest`, `DatosPrueba` y `ArquitecturaTest`.
+- Integración contra PostgreSQL (`./mvnw verify`, paquete `integracion`): `AislamientoEntreCafeteriasIT` (A no ve ni escribe datos de B, rol sin superusuario/BYPASSRLS, RLS forzado en toda tabla, vista con `security_invoker`), `IngresosYEgresosPostgresIT`, `TransaccionTodoONadaIT` y `MovimientosControllerIT` (HTTP completo). Usan un reloj fijo en 2099 y deshacen sus cambios.
 
 ## Calidad en CI
 GitHub con **Trivy** (vulnerabilidades; el `pom.xml` ya fuerza `tomcat.version` y `jackson-bom.version` por CVEs reportados) y **ArchUnit**.

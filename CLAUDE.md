@@ -13,8 +13,13 @@ Responde y escribe comentarios, mensajes de commit y nombres de dominio **en esp
 - CI en GitHub: **Trivy** y **ArchUnit**. Si Trivy reporta CVEs, se fijan versiones en `<properties>` del `pom.xml` (ya hay overrides de Tomcat y Jackson).
 
 ## Comandos
-- `./mvnw test` (en Windows `mvnw.cmd test`): pruebas unitarias + `ArquitecturaTest`. Correrlas siempre después de cambiar código.
-- `./mvnw spring-boot:run`: levantar la API.
+- `./mvnw test` (en Windows `mvnw.cmd test`): pruebas unitarias + `ArquitecturaTest`, sin base de datos. Correrlas siempre después de cambiar código.
+- `./mvnw verify`: además corre las pruebas `*IT` contra PostgreSQL (necesitan la base creada y `.env` o las variables `JJSKAFFEE_DB_*`).
+- `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`: levantar la API en local (lee `.env`; ver `.env.example`).
+- `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed .`: el mismo escaneo del CI (Trivy 0.75.0).
+
+## Base de datos
+Scripts en `db/` (se corren a mano en pgAdmin y en CI, en orden). Migración: `01_crear_usuario_y_base.sql` (rol `app_jjskaffee` sin superusuario ni BYPASSRLS + base `jjskaffee`) y `02_esquema.sql` (tablas, RLS forzado, vista `v_movimiento` con `security_invoker`, permisos mínimos). Seeds de prueba, siempre aparte de la migración: `03_seed_cafeterias_y_catalogo.sql` y `04_seed_usuarios.sql` (cafeterías A y B con los UUID de `DatosPrueba`). No hay herramienta de migraciones: un cambio de esquema es un script nuevo numerado. Los nombres de tabla siguen el MER del equipo (p. ej. `usuarios`: administrador y cajeros). Las tablas de catálogo y `usuarios` son de solo lectura para la app; no hay `DELETE` en ninguna tabla.
 
 ## Arquitectura hexagonal (obligatoria)
 Paquete raíz `co.edu.uco.jjskafee` (con una sola "f", no corregirlo):
@@ -26,7 +31,7 @@ Paquete raíz `co.edu.uco.jjskafee` (con una sola "f", no corregirlo):
 - `infraestructura.output`: repositorios JDBC, `UnidadDeTrabajo` con transacción + RLS, adaptador de Firebase, `SecretsProvider`.
 - Nada puede depender de `infraestructura`; sin ciclos entre paquetes. Si un cambio rompe `ArquitecturaTest`, el cambio está mal, no la prueba.
 
-**Estado**: dominio, casos de uso (`RegistrarIngreso`, `RegistrarEgreso`, `ConsultarMovimientos`), puertos, DTOs y pruebas están hechos. **Falta toda la capa `infraestructura`** (controller, filtro de Firebase, repositorios Pg*, `PgUnidadDeTrabajo`, configuración de beans) y las dependencias correspondientes en el `pom.xml` (JDBC, driver de PostgreSQL, Firebase Admin, Secret Manager).
+**Estado**: dominio, casos de uso, puertos, DTOs e infraestructura (`MovimientosController`, `FirebaseAuthFilter`, `FirebaseAuthAdapter`, repositorios `Pg*`, `PgUnidadDeTrabajo`, `BeanConfig`) están hechos, con pruebas unitarias y de integración. El usuario sale del token (`uid` + claim `id_cafeteria`) y de la tabla `usuarios` (id, nombre, rol), leída con RLS. Pendiente: perfil `gcp` (Cloud Run + Cloud SQL) y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno.
 
 Detalle de capas, adaptadores pendientes y recorrido de una petición:
 @docs/arquitectura/backend-hexagonal.md

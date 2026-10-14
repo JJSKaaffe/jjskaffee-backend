@@ -43,4 +43,4 @@ reporte-trivy.txt
 *.key
 *-firebase-adminsdk-*.json
 service-account*.json
-application-local.properties
+/target-test.log

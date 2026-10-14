@@ -1,28 +1,23 @@
 package co.edu.uco.jjskafee.dominio;
 
-import co.edu.uco.jjskafee.dominio.enums.TipoMovimiento;
-
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
-/** Movimientos consultados con sus totales. */
-public record ResultadoMovimientos(List<Movimiento> movimientos, BigDecimal ingresos, BigDecimal egresos) {
+/**
+ * Una página de movimientos con los totales de TODO el filtro (no solo de la página).
+ * Los totales los calcula la base de datos con SUM; nunca se suman en Java (ADR-0004).
+ */
+public record ResultadoMovimientos(List<Movimiento> movimientos, BigDecimal ingresos, BigDecimal egresos,
+                                   long totalMovimientos) {
 
-    /** Calcula los totales a partir de la lista de movimientos. */
-    public static ResultadoMovimientos de(List<Movimiento> movimientos) {
-        BigDecimal ingresos = sumar(movimientos, TipoMovimiento.INGRESO);
-        BigDecimal egresos = sumar(movimientos, TipoMovimiento.EGRESO);
-        return new ResultadoMovimientos(List.copyOf(movimientos), ingresos, egresos);
+    public ResultadoMovimientos {
+        movimientos = List.copyOf(movimientos);
+        Objects.requireNonNull(ingresos, "El total de ingresos es obligatorio");
+        Objects.requireNonNull(egresos, "El total de egresos es obligatorio");
     }
 
     public BigDecimal balance() {
         return ingresos.subtract(egresos);
-    }
-
-    private static BigDecimal sumar(List<Movimiento> movimientos, TipoMovimiento tipo) {
-        return movimientos.stream()
-                .filter(m -> m.tipo() == tipo)
-                .map(Movimiento::monto)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

@@ -2,17 +2,18 @@ package co.edu.uco.jjskafee.servicios.casouso;
 
 import co.edu.uco.jjskafee.dominio.Categoria;
 import co.edu.uco.jjskafee.dominio.Egreso;
+import co.edu.uco.jjskafee.dominio.FiltroMovimientos;
 import co.edu.uco.jjskafee.dominio.Movimiento;
 import co.edu.uco.jjskafee.dominio.Producto;
+import co.edu.uco.jjskafee.dominio.ResultadoMovimientos;
 import co.edu.uco.jjskafee.dominio.Venta;
-import co.edu.uco.jjskafee.dominio.enums.TipoMovimiento;
 import co.edu.uco.jjskafee.servicios.output.ports.CatalogoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.EgresoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.MovimientoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.UnidadDeTrabajo;
 import co.edu.uco.jjskafee.servicios.output.ports.VentaRepository;
 
-import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,13 +57,22 @@ final class RepositoriosEnMemoria {
         @Override public void actualizarEstado(Venta venta) { guardadas.put(venta.getId(), venta); }
     }
 
+    /** Devuelve los totales que se le configuren, como haría la BD con SUM, y recuerda el último filtro. */
     static class Movimientos implements MovimientoRepository {
         final List<Movimiento> datos = new ArrayList<>();
-        UUID ultimoFiltroUsuario;
+        BigDecimal totalIngresos = BigDecimal.ZERO;
+        BigDecimal totalEgresos = BigDecimal.ZERO;
+        long totalMovimientos;
+        FiltroMovimientos ultimoFiltro;
         @Override
-        public List<Movimiento> buscar(LocalDate desde, LocalDate hasta, TipoMovimiento tipo, UUID soloDelUsuario) {
-            ultimoFiltroUsuario = soloDelUsuario;
-            return datos.stream().filter(m -> tipo == null || m.tipo() == tipo).toList();
+        public ResultadoMovimientos buscar(FiltroMovimientos filtro) {
+            ultimoFiltro = filtro;
+            List<Movimiento> pagina = datos.stream()
+                    .filter(m -> filtro.tipo() == null || m.tipo() == filtro.tipo())
+                    .skip(filtro.desplazamiento())
+                    .limit(filtro.tamano())
+                    .toList();
+            return new ResultadoMovimientos(pagina, totalIngresos, totalEgresos, totalMovimientos);
         }
     }
 

@@ -14,7 +14,7 @@ import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
 
-/** Datos de prueba iguales a db/03_datos_prueba.sql (mismos UUID). */
+/** Datos de prueba iguales a los seeds db/03_seed_cafeterias_y_catalogo.sql y db/04_seed_usuarios.sql (mismos UUID). */
 public final class DatosPrueba {
 
     private DatosPrueba() { }
@@ -28,6 +28,8 @@ public final class DatosPrueba {
 
     public static final Categoria INSUMOS = new Categoria(
             UUID.fromString("c0000000-0000-0000-0000-000000000011"), "Insumos", TipoCategoria.EGRESO, false);
+    public static final Categoria SERVICIOS = new Categoria(
+            UUID.fromString("c0000000-0000-0000-0000-000000000012"), "Servicios públicos", TipoCategoria.EGRESO, false);
     public static final Categoria ARCHIVADA = new Categoria(
             UUID.fromString("c0000000-0000-0000-0000-000000000015"), "Mantenimiento (antigua)", TipoCategoria.EGRESO, true);
     public static final Categoria BEBIDAS = new Categoria(
@@ -40,6 +42,20 @@ public final class DatosPrueba {
 
     /** Adiciones que se le pueden poner al latte (tabla producto_adicion). */
     public static final Set<UUID> ADICIONES_LATTE = Set.of(ALMENDRA.getId(), SHOT.getId());
+
+    /** uid de Firebase de los usuarios de prueba (columna usuarios.firebase_uid). */
+    public static final String UID_ADMIN = "uid-prueba-laura";
+    public static final String UID_CAJERO = "uid-prueba-andres";
+
+    // Segunda cafetería: sirve para probar que A y B no ven los datos de la otra (RLS)
+    public static final UUID CAFETERIA_B = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    public static final UsuarioAutenticado ADMIN_B = new UsuarioAutenticado(
+            UUID.fromString("a0000000-0000-0000-0000-000000000003"), CAFETERIA_B, "Marta Díaz", Rol.ADMINISTRADOR);
+    public static final UsuarioAutenticado CAJERO_B = new UsuarioAutenticado(
+            UUID.fromString("a0000000-0000-0000-0000-000000000004"), CAFETERIA_B, "Camilo Peña", Rol.CAJERO);
+    public static final Categoria INSUMOS_B = new Categoria(
+            UUID.fromString("c0000000-0000-0000-0000-000000000031"), "Insumos", TipoCategoria.EGRESO, false);
+    public static final Producto CAPUCHINO_B = producto("21", "Capuchino", 7000, TipoProducto.BASE);
 
     public static final Instant AHORA = Instant.parse("2026-10-11T15:00:00Z");
     public static final Clock RELOJ = Clock.fixed(AHORA, ZoneOffset.UTC);

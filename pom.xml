@@ -31,6 +31,9 @@
         <!-- Overrides por CVEs reportados por Trivy; quitar cuando Spring Boot los incluya -->
         <tomcat.version>11.0.25</tomcat.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
+        <!-- Jackson 2 lo trae firebase-admin (Firestore): CVE-2026-89407, -89425, -68497, -91776, -91777 -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <firebase-admin.version>9.11.0</firebase-admin.version>
     </properties>
     <dependencies>
         <dependency>
@@ -42,6 +45,25 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Persistencia con JdbcTemplate, sin JPA (ADR-0012) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Verificación del token de Firebase Authentication (ADR-0001).
+             Sin exclusiones: el SDK usa clases de Firestore/gax aunque solo se verifiquen tokens -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>${firebase-admin.version}</version>
         </dependency>
 
 
@@ -64,6 +86,11 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!-- Pruebas de integración (*IT.java) contra PostgreSQL: se corren con ./mvnw verify -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
