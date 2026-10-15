@@ -1,0 +1,25 @@
+# =====================================================================
+# Perfil "nube": Cloud Run. Lo activa el workflow de despliegue.
+# Aquí NO se configura SSL: el certificado y el HTTPS los pone Cloud Run en el
+# borde, y el contenedor recibe HTTP plano en $PORT. La configuración común ya
+# trae forward-headers-strategy para que las URLs salgan en https.
+#
+# Ninguna credencial vive aquí: la contraseña llega desde Secret Manager como
+# variable de entorno (ADR-0014) y las credenciales de Firebase, de la cuenta de
+# servicio del propio servicio de Cloud Run.
+# =====================================================================
+spring:
+  datasource:
+    hikari:
+      # Cloud Run escala a cero y abre pocas conexiones por instancia:
+      # un pool chico evita agotar las conexiones de PostgreSQL.
+      maximum-pool-size: 5
+
+jjskaffee:
+  seguridad:
+    modo: firebase
+
+logging:
+  level:
+    root: INFO
+    co.edu.uco.jjskafee: INFO

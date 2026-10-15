@@ -1,0 +1,18 @@
+# =====================================================================
+# Perfil "local": tu PC con PostgreSQL (pgAdmin).
+# Actívalo con  SPRING_PROFILES_ACTIVE=local  (o en IntelliJ: Active profiles = local).
+# Lee las variables de un archivo .env en la raíz del proyecto (copia .env.example).
+# =====================================================================
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+jjskaffee:
+  seguridad:
+    # "desarrollo" permite probar sin Firebase con tokens dev:<id_cafeteria>:<firebase_uid>.
+    # Pon JJSKAFFEE_MODO_SEGURIDAD=firebase en el .env para probar con tokens reales.
+    modo: ${JJSKAFFEE_MODO_SEGURIDAD:desarrollo}
+
+logging:
+  level:
+    co.edu.uco.jjskafee: DEBUG
