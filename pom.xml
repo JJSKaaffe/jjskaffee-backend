@@ -22,7 +22,7 @@
         <tomcat.version>11.0.25</tomcat.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
         <!-- Versiones que no maneja Spring Boot -->
-        <firebase-admin.version>9.8.0</firebase-admin.version>
+        <firebase-admin.version>9.11.0</firebase-admin.version>
         <archunit.version>1.5.1</archunit.version>
     </properties>
 
