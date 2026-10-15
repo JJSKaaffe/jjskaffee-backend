@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     # No despliega si las pruebas del otro workflow no pasaron en este commit
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Autenticarse en Google Cloud
         uses: google-github-actions/auth@v3

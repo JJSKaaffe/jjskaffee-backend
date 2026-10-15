@@ -42,7 +42,7 @@ jobs:
       JJSKAFFEE_PRUEBAS_DB_USUARIO: app_jjskaffee
       JJSKAFFEE_PRUEBAS_DB_CONTRASENA: cambiar_en_desarrollo
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Cargar el esquema, el RLS y los datos de prueba
         run: |
@@ -70,7 +70,7 @@ jobs:
       contents: read
       security-events: write   # para publicar resultados en la pestaña Security
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Escanear repositorio y generar reporte SARIF
         uses: aquasecurity/trivy-action@v0.36.0
@@ -117,7 +117,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
