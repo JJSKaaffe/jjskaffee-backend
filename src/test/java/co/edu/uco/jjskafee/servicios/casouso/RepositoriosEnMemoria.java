@@ -7,6 +7,7 @@ import co.edu.uco.jjskafee.dominio.Movimiento;
 import co.edu.uco.jjskafee.dominio.Producto;
 import co.edu.uco.jjskafee.dominio.ResultadoMovimientos;
 import co.edu.uco.jjskafee.dominio.Venta;
+import co.edu.uco.jjskafee.servicios.output.ports.CafeteriaRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.CatalogoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.EgresoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.MovimientoRepository;
@@ -16,6 +17,7 @@ import co.edu.uco.jjskafee.servicios.output.ports.VentaRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,11 +52,32 @@ final class RepositoriosEnMemoria {
         @Override public void guardar(Egreso egreso) { guardados.add(egreso); }
     }
 
+    /** Como la UNIQUE (id_cafeteria, clave_idempotencia) de la BD: no guarda una segunda venta con la misma clave. */
     static class Ventas implements VentaRepository {
         final Map<UUID, Venta> guardadas = new HashMap<>();
-        @Override public void guardar(Venta venta) { guardadas.put(venta.getId(), venta); }
+        @Override
+        public boolean guardar(Venta venta) {
+            if (venta.getClaveIdempotencia() != null && guardadas.values().stream().anyMatch(v ->
+                    v.getIdCafeteria().equals(venta.getIdCafeteria())
+                            && venta.getClaveIdempotencia().equals(v.getClaveIdempotencia()))) {
+                return false;
+            }
+            guardadas.put(venta.getId(), venta);
+            return true;
+        }
         @Override public Optional<Venta> buscarPorId(UUID id) { return Optional.ofNullable(guardadas.get(id)); }
+        @Override
+        public Optional<Venta> buscarPorClaveIdempotencia(UUID clave) {
+            return guardadas.values().stream().filter(v -> clave.equals(v.getClaveIdempotencia())).findFirst();
+        }
         @Override public void actualizarEstado(Venta venta) { guardadas.put(venta.getId(), venta); }
+    }
+
+    /** Cafeterías activas; las que no estén en el conjunto se tratan como inactivas (o no visibles). */
+    static class Cafeterias implements CafeteriaRepository {
+        final Set<UUID> activas = new HashSet<>();
+        Cafeterias activa(UUID id) { activas.add(id); return this; }
+        @Override public boolean estaActiva(UUID id) { return activas.contains(id); }
     }
 
     /** Devuelve los totales que se le configuren, como haría la BD con SUM, y recuerda el último filtro. */

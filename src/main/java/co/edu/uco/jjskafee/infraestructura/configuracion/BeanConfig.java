@@ -1,5 +1,6 @@
 package co.edu.uco.jjskafee.infraestructura.configuracion;
 
+import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgCafeteriaRepository;
 import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgCatalogoRepository;
 import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgEgresoRepository;
 import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgMovimientoRepository;
@@ -11,6 +12,7 @@ import co.edu.uco.jjskafee.servicios.casouso.RegistrarIngreso;
 import co.edu.uco.jjskafee.servicios.input.ports.ConsultarMovimientosUseCase;
 import co.edu.uco.jjskafee.servicios.input.ports.RegistrarEgresoUseCase;
 import co.edu.uco.jjskafee.servicios.input.ports.RegistrarIngresoUseCase;
+import co.edu.uco.jjskafee.servicios.output.ports.CafeteriaRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.CatalogoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.EgresoRepository;
 import co.edu.uco.jjskafee.servicios.output.ports.MovimientoRepository;
@@ -58,6 +60,11 @@ public class BeanConfig {
     }
 
     @Bean
+    public CafeteriaRepository cafeteriaRepository(JdbcTemplate jdbc) {
+        return new PgCafeteriaRepository(jdbc);
+    }
+
+    @Bean
     public EgresoRepository egresoRepository(JdbcTemplate jdbc) {
         return new PgEgresoRepository(jdbc);
     }
@@ -72,8 +79,9 @@ public class BeanConfig {
 
     @Bean
     public RegistrarIngresoUseCase registrarIngreso(CatalogoRepository catalogo, VentaRepository ventas,
+                                                    CafeteriaRepository cafeterias,
                                                     UnidadDeTrabajo unidadDeTrabajo, Clock reloj) {
-        return new RegistrarIngreso(catalogo, ventas, unidadDeTrabajo, reloj);
+        return new RegistrarIngreso(catalogo, ventas, cafeterias, unidadDeTrabajo, reloj);
     }
 
     @Bean

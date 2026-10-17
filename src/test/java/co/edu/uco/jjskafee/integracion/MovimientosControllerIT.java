@@ -8,6 +8,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 import static co.edu.uco.jjskafee.DatosPrueba.*;
 import static co.edu.uco.jjskafee.integracion.ConfiguracionDePrueba.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -123,6 +125,83 @@ class MovimientosControllerIT {
                 .andExpect(status().isNotFound());
         mvc.perform(post("/ingresos/{id}/deshacer", idVenta).header("Authorization", bearer(TOKEN_CAJERO)))
                 .andExpect(status().isNoContent());
+    }
+
+    // ----- Validaciones de registrar ingreso -----
+
+    private static String pandebonos(String cantidad) {
+        return """
+                {"items": [{"idProducto": "%s", "cantidad": %s}]}""".formatted(PANDEBONO.getId(), cantidad);
+    }
+
+    private String idVentaDe(MvcResult resultado) throws Exception {
+        return resultado.getResponse().getContentAsString().replaceAll(".*\"idVenta\":\"([^\"]+)\".*", "$1");
+    }
+
+    @Test
+    void laMismaIdempotencyKeyDevuelveLaMismaVenta() throws Exception {
+        String clave = UUID.randomUUID().toString();
+
+        MvcResult primera = mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .header("Idempotency-Key", clave)
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("2")))
+                .andExpect(status().isCreated())
+                .andReturn();
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .header("Idempotency-Key", clave)
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("2")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idVenta").value(idVentaDe(primera)))
+                .andExpect(jsonPath("$.total").value(5000));
+    }
+
+    @Test
+    void laMismaIdempotencyKeyConOtroCuerpoResponde422() throws Exception {
+        String clave = UUID.randomUUID().toString();
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .header("Idempotency-Key", clave)
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1")))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .header("Idempotency-Key", clave)
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("3")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value("Esta Idempotency-Key ya se usó para una venta con otros "
+                        + "productos o cantidades; para registrar una venta nueva usa una clave nueva"));
+    }
+
+    @Test
+    void unaIdempotencyKeyQueNoEsUuidResponde400() throws Exception {
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .header("Idempotency-Key", "no-es-un-uuid")
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unaCantidadMayorA99Responde400ConElCampo() throws Exception {
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("100")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores['items[0].cantidad']").value("La cantidad máxima es 99"));
+    }
+
+    @Test
+    void unaCantidadConDecimalesResponde400EnVezDeTruncarse() throws Exception {
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+                        .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1.5")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unaCafeteriaInactivaResponde422() throws Exception {
+        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO_INACTIVA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items": [{"idProducto": "%s", "cantidad": 1}]}""".formatted(TINTO_INACTIVA.getId())))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value("La cafetería no está activa; no se pueden registrar ingresos"));
     }
 
     @Test

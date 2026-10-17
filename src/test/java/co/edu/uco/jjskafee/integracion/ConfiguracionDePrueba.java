@@ -30,9 +30,11 @@ public class ConfiguracionDePrueba {
     public static final String TOKEN_CAJERO = "token-cajero-a";
     public static final String TOKEN_ADMIN_B = "token-admin-b";
     public static final String TOKEN_CAJERO_B = "token-cajero-b";
+    public static final String TOKEN_CAJERO_INACTIVA = "token-cajero-c-inactiva";
 
     private static final Map<String, UsuarioAutenticado> USUARIOS = Map.of(
-            TOKEN_ADMIN, ADMIN, TOKEN_CAJERO, CAJERO, TOKEN_ADMIN_B, ADMIN_B, TOKEN_CAJERO_B, CAJERO_B);
+            TOKEN_ADMIN, ADMIN, TOKEN_CAJERO, CAJERO, TOKEN_ADMIN_B, ADMIN_B, TOKEN_CAJERO_B, CAJERO_B,
+            TOKEN_CAJERO_INACTIVA, CAJERO_INACTIVA);
 
     @Bean
     VerificadorDeToken verificadorDePrueba() {

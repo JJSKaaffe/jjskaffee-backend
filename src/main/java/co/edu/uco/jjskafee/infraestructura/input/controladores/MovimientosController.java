@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,6 +33,8 @@ import java.util.UUID;
 @RestController
 public class MovimientosController {
 
+    public static final String ENCABEZADO_IDEMPOTENCIA = "Idempotency-Key";
+
     private final RegistrarIngresoUseCase registrarIngreso;
     private final RegistrarEgresoUseCase registrarEgreso;
     private final ConsultarMovimientosUseCase consultarMovimientos;
@@ -43,12 +46,17 @@ public class MovimientosController {
         this.consultarMovimientos = consultarMovimientos;
     }
 
-    /** Registra una venta con sus productos y adiciones (RF24–RF27). */
+    /**
+     * Registra una venta con sus productos y adiciones (RF24–RF27).
+     * Idempotency-Key (UUID, opcional): un reintento con la misma clave devuelve la venta ya registrada.
+     */
     @PostMapping("/ingresos")
     @ResponseStatus(HttpStatus.CREATED)
     public IngresoResponse registrarIngreso(@Valid @RequestBody IngresoRequest solicitud,
+                                            @RequestHeader(value = ENCABEZADO_IDEMPOTENCIA, required = false)
+                                            UUID claveIdempotencia,
                                             @RequestAttribute(FirebaseAuthFilter.USUARIO) UsuarioAutenticado usuario) {
-        return registrarIngreso.registrar(solicitud, usuario);
+        return registrarIngreso.registrar(solicitud, claveIdempotencia, usuario);
     }
 
     /** Deshace una venta: solo quien la registró y dentro de los 60 segundos (ADR-0008). */

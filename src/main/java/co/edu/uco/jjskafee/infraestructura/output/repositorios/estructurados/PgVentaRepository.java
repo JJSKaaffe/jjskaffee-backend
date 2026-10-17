@@ -34,12 +34,21 @@ public class PgVentaRepository implements VentaRepository {
     }
 
     @Override
-    public void guardar(Venta venta) {
-        jdbc.update("""
-                        INSERT INTO venta (id, id_cafeteria, id_cajero, fecha_hora, estado, motivo_anulacion, total)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+    public boolean guardar(Venta venta) {
+        // ON CONFLICT: si otra transacción ya guardó una venta con la misma clave de idempotencia en esta
+        // cafetería, PostgreSQL espera a que termine y no inserta nada (sin error que aborte la transacción).
+        // Las ventas sin clave (NULL) nunca chocan.
+        int insertadas = jdbc.update("""
+                        INSERT INTO venta (id, id_cafeteria, id_cajero, fecha_hora, estado, motivo_anulacion, total,
+                                           clave_idempotencia, hash_solicitud)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (id_cafeteria, clave_idempotencia) DO NOTHING""",
                 venta.getId(), venta.getIdCafeteria(), venta.getIdCajero(), aTimestamp(venta.getFechaHora()),
-                venta.getEstado().name(), venta.getMotivoAnulacion(), venta.total());
+                venta.getEstado().name(), venta.getMotivoAnulacion(), venta.total(),
+                venta.getClaveIdempotencia(), venta.getHashSolicitud());
+        if (insertadas == 0) {
+            return false;
+        }
 
         // Los detalles vienen en orden (cada base antes que sus adiciones), así la FK id_detalle_base se cumple
         List<Object[]> filas = venta.getDetalles().stream()
@@ -51,25 +60,43 @@ public class PgVentaRepository implements VentaRepository {
                 INSERT INTO detalle_venta (id, id_cafeteria, id_venta, id_producto, cantidad, precio_unitario,
                                            id_detalle_base)
                 VALUES (?, ?, ?, ?, ?, ?, ?)""", filas);
+        return true;
     }
 
     @Override
     public Optional<Venta> buscarPorId(UUID idVenta) {
-        Optional<FilaVenta> fila = jdbc.query("""
-                        SELECT id, id_cafeteria, id_cajero, fecha_hora, estado, motivo_anulacion
-                        FROM venta
-                        WHERE id = ?""",
+        return buscarUna("""
+                SELECT id, id_cafeteria, id_cajero, fecha_hora, estado, motivo_anulacion,
+                       clave_idempotencia, hash_solicitud
+                FROM venta
+                WHERE id = ?""", idVenta);
+    }
+
+    @Override
+    public Optional<Venta> buscarPorClaveIdempotencia(UUID claveIdempotencia) {
+        // RLS limita la búsqueda a la cafetería activa: la UNIQUE es (id_cafeteria, clave_idempotencia)
+        return buscarUna("""
+                SELECT id, id_cafeteria, id_cajero, fecha_hora, estado, motivo_anulacion,
+                       clave_idempotencia, hash_solicitud
+                FROM venta
+                WHERE clave_idempotencia = ?""", claveIdempotencia);
+    }
+
+    private Optional<Venta> buscarUna(String sql, UUID valor) {
+        Optional<FilaVenta> fila = jdbc.query(sql,
                 (rs, n) -> new FilaVenta(
                         rs.getObject("id", UUID.class),
                         rs.getObject("id_cafeteria", UUID.class),
                         rs.getObject("id_cajero", UUID.class),
                         leerInstante(rs, "fecha_hora"),
                         EstadoVenta.valueOf(rs.getString("estado")),
-                        rs.getString("motivo_anulacion")),
-                idVenta).stream().findFirst();
+                        rs.getString("motivo_anulacion"),
+                        rs.getObject("clave_idempotencia", UUID.class),
+                        rs.getString("hash_solicitud")),
+                valor).stream().findFirst();
 
         return fila.map(v -> Venta.reconstruir(v.id(), v.idCafeteria(), v.idCajero(), v.fechaHora(),
-                leerDetalles(v.id()), v.estado(), v.motivoAnulacion()));
+                leerDetalles(v.id()), v.claveIdempotencia(), v.hashSolicitud(), v.estado(), v.motivoAnulacion()));
     }
 
     @Override
@@ -109,7 +136,8 @@ public class PgVentaRepository implements VentaRepository {
     }
 
     private record FilaVenta(UUID id, UUID idCafeteria, UUID idCajero, Instant fechaHora,
-                             EstadoVenta estado, String motivoAnulacion) { }
+                             EstadoVenta estado, String motivoAnulacion,
+                             UUID claveIdempotencia, String hashSolicitud) { }
 
     private record FilaDetalle(UUID id, Producto producto, int cantidad, BigDecimal precioUnitario,
                                UUID idDetalleBase) { }

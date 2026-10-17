@@ -57,6 +57,12 @@ public final class DatosPrueba {
             UUID.fromString("c0000000-0000-0000-0000-000000000031"), "Insumos", TipoCategoria.EGRESO, false);
     public static final Producto CAPUCHINO_B = producto("21", "Capuchino", 7000, TipoProducto.BASE);
 
+    // Tercera cafetería, inactiva (db/06_seed_cafeteria_inactiva.sql): no puede registrar ingresos
+    public static final UUID CAFETERIA_INACTIVA = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    public static final UsuarioAutenticado CAJERO_INACTIVA = new UsuarioAutenticado(
+            UUID.fromString("a0000000-0000-0000-0000-000000000005"), CAFETERIA_INACTIVA, "Sofía Mora", Rol.CAJERO);
+    public static final Producto TINTO_INACTIVA = producto("31", "Tinto", 2000, TipoProducto.BASE);
+
     public static final Instant AHORA = Instant.parse("2026-10-11T15:00:00Z");
     public static final Clock RELOJ = Clock.fixed(AHORA, ZoneOffset.UTC);
 
