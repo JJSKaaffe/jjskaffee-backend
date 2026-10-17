@@ -4,8 +4,8 @@
 # Antes de que esto funcione hay que crear, una sola vez, los secretos del
 # repositorio en GitHub (Settings > Secrets and variables > Actions):
 #
-#   GCP_PROYECTO id del proyecto de Google Cloud (ej. jjskaffee-prod)
-#   GCP_CUENTA_SERVICIO JSON completo de la cuenta de servicio con permisos de
+#   GCP_PROYECTO          id del proyecto de Google Cloud (ej. jjskaffee-prod)
+#   GCP_CUENTA_SERVICIO   JSON completo de la cuenta de servicio con permisos de
 #                         Cloud Run Admin, Artifact Registry Writer y Service Account User
 #
 # Y en Google Cloud, una sola vez:
@@ -18,10 +18,9 @@
 # =====================================================================
 name: Despliegue a Cloud Run
 
-# Solo manual: desde GitHub > Actions > "Despliegue a Cloud Run" > Run workflow.
-# Mientras no existan los secretos de Google Cloud, un despliegue automático en
-# cada push solo ensucia el historial con fallos.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -36,6 +35,7 @@ jobs:
   desplegar:
     name: Construir imagen y desplegar
     runs-on: ubuntu-latest
+    # No despliega si las pruebas del otro workflow no pasaron en este commit
     steps:
       - uses: actions/checkout@v5
 
