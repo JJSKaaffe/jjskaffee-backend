@@ -1,0 +1,99 @@
+name: Seguridad y Arquitectura
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# Las acciones van fijadas al hash del commit (no al tag): un tag se puede mover a otro código,
+# un hash no. El comentario indica la versión; para actualizar, cambia hash y comentario juntos.
+
+jobs:
+  arquitectura:
+    name: Tests, ArchUnit e integración
+    runs-on: ubuntu-latest
+
+    # PostgreSQL 17, igual que en local. Es un contenedor desechable: esta clave solo existe
+    # dentro del job y no protege nada real.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '27'
+          cache: maven
+
+      # Los mismos scripts que se corren en pgAdmin, en el mismo orden (migración y luego seeds)
+      - name: Crear base de datos, esquema con RLS y seeds de prueba
+        run: |
+          APP_CLAVE="$(openssl rand -hex 24)"
+          echo "::add-mask::$APP_CLAVE"
+          psql -v ON_ERROR_STOP=1 -d postgres -f db/01_crear_usuario_y_base.sql
+          psql -v ON_ERROR_STOP=1 -d postgres -c "ALTER ROLE app_jjskaffee PASSWORD '$APP_CLAVE'"
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/02_esquema.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/03_seed_cafeterias_y_catalogo.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/04_seed_usuarios.sql
+          {
+            echo "JJSKAFFEE_DB_URL=jdbc:postgresql://localhost:5432/jjskaffee"
+            echo "JJSKAFFEE_DB_USUARIO=app_jjskaffee"
+            echo "JJSKAFFEE_DB_CLAVE=$APP_CLAVE"
+          } >> "$GITHUB_ENV"
+
+      - run: chmod +x mvnw
+
+      # verify = pruebas unitarias + ArquitecturaTest (surefire) + pruebas *IT contra PostgreSQL (failsafe)
+      - run: ./mvnw -B verify
+
+  trivy:
+    name: Escaneo Trivy
+    runs-on: ubuntu-latest
+    # Espera al primer trabajo para reutilizar la caché de Maven que este deja guardada
+    needs: arquitectura
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Instala Java y restaura la caché de ~/.m2
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '27'
+          cache: maven
+
+      # Deja todas las dependencias en ~/.m2 para que Trivy no tenga que pedirlas
+      # a Maven Central (evita el error 429 Too Many Requests)
+      - name: Descargar dependencias de Maven
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -q dependency:go-offline
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0          # la misma versión de Trivy que se usa en local
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

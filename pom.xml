@@ -9,37 +9,45 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>co.edu.uco</groupId>
-    <artifactId>jjskaffee-backend-modular</artifactId>
+    <artifactId>JJSkafee-Joel-UCO</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>jjskaffee-backend-modular</name>
-    <description>JJSKaffee · registro de ingresos y egresos · monolito modular (backend de respaldo)</description>
-
+    <name>JJSkafee-Joel-UCO</name>
+    <description>JJSkafee-Joel-UCO</description>
+    <url/>
+    <licenses>
+        <license/>
+    </licenses>
+    <developers>
+        <developer/>
+    </developers>
+    <scm>
+        <connection/>
+        <developerConnection/>
+        <tag/>
+        <url/>
+    </scm>
     <properties>
         <java.version>27</java.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <!-- Overrides por CVEs reportados por Trivy (iguales al backend hexagonal); quitar cuando Spring Boot los incluya -->
+        <!-- Overrides por CVEs reportados por Trivy; quitar cuando Spring Boot los incluya -->
         <tomcat.version>11.0.25</tomcat.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
-        <!-- Versiones que no maneja Spring Boot -->
-        <firebase-admin.version>9.8.0</firebase-admin.version>
-        <archunit.version>1.5.1</archunit.version>
+        <!-- Jackson 2 lo trae firebase-admin (Firestore): CVE-2026-89407, -89425, -68497, -91776, -91777 -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <firebase-admin.version>9.11.0</firebase-admin.version>
     </properties>
-
     <dependencies>
-        <!-- API REST -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
-        <!-- Validaciones de los request (@NotNull, @Positive, @Size...) con mensajes en i18n/mensajes.properties -->
+        <!-- Validaciones de los DTO request (@NotNull, @Positive, @Size...) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Persistencia con JDBC (JdbcTemplate), sin JPA (ArchUnit lo verifica) -->
+        <!-- Persistencia con JdbcTemplate, sin JPA (ADR-0012) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
@@ -50,43 +58,25 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Salud del servicio + trazas OpenTelemetry (traceId/spanId en el MDC de los logs) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-opentelemetry</artifactId>
-        </dependency>
-
-        <!-- Solo para VERIFICAR el token de Firebase Authentication (módulo externo, ADR-0001) -->
+        <!-- Verificación del token de Firebase Authentication (ADR-0001).
+             Sin exclusiones: el SDK usa clases de Firestore/gax aunque solo se verifiquen tokens -->
         <dependency>
             <groupId>com.google.firebase</groupId>
             <artifactId>firebase-admin</artifactId>
             <version>${firebase-admin.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.google.cloud</groupId>
-                    <artifactId>google-cloud-firestore</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.google.cloud</groupId>
-                    <artifactId>google-cloud-storage</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
-        <!-- Pruebas -->
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
+
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
-            <version>${archunit.version}</version>
+            <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -97,6 +87,12 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Pruebas de integración (*IT.java) contra PostgreSQL: se corren con ./mvnw verify -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
         </plugins>
     </build>
+
 </project>

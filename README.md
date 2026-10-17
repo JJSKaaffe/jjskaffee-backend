@@ -1,155 +1,59 @@
-# JJSKaffee · backend modular (respaldo de emergencia)
+# jjskaffee-backend
 
-Backend de **registro de ingresos y egresos** con arquitectura de **monolito modular**.
-Es un proyecto aparte: no toca el repositorio `jjskaffee-backend` (hexagonal).
-Usa **la misma base de datos** (`db/jjskaffee_completo.sql`, sin cambios) y el mismo stack:
-Java 27 · Spring Boot 4.1.1 · JDBC (sin JPA) · PostgreSQL con RLS · Firebase Auth · Trivy · ArchUnit.
+API REST del sistema de gestión financiera **multi-tenant** para cafeterías pequeñas e independientes, desarrollado por **JJSKaffee**.
 
-## Módulos
+> Repositorio hermano: [jjskaffee-frontend](https://github.com/JJSKaaffe/jjskaffee-frontend)
 
-| Módulo | Qué hace | Tablas que le pertenecen | Usa de otros módulos |
-|---|---|---|---|
-| `compartido` | Usuario autenticado, transacción + RLS, mensajes, errores HTTP, CORS, trazas | lee `usuario` | — |
-| `catalogo` | Productos, adiciones y categorías (solo lectura) | `categoria`, `producto`, `producto_adicion` | compartido |
-| `ingresos` | Ventas con adiciones (RF24–RF27) y deshacer en 60 s (ADR-0008) | `venta`, `detalle_venta` | `catalogo.api` |
-| `egresos` | Gastos, solo administrador (RF14, RF18) | `egreso` | `catalogo.api` |
-| `movimientos` | Consulta con totales y paginación (ADR-0004) | lee la vista `v_movimiento` | compartido |
+## Documentación de arquitectura
 
-Cada módulo tiene las mismas capas:
+| Carpeta | Contenido |
+| --- | --- |
+| [`doc/drivers`](doc/drivers/drivers.md) | Drivers arquitectónicos: funcionalidades significativas, restricciones técnicas y de negocio, escenarios de atributos de calidad |
+| [`doc/adr`](doc/adr) | Registros de decisiones de arquitectura (ADR-0001 a ADR-0014) |
+| [`doc/spikes`](doc/spikes) | Spikes técnicos que validan las decisiones (SPIKE-01 a SPIKE-06) |
 
-```
-<modulo>/
-  api/              contrato público (solo catalogo lo necesita): interfaces + records
-  dominio/          reglas del negocio, Java puro, y el enum Mensajes<Módulo> con las claves
-  aplicacion/       casos de uso (Java puro) + puertos/entrada + puertos/salida + comandos
-  infraestructura/
-    web/            controladores y DTO request/response
-    persistencia/   repositorios Pg* con JdbcTemplate
-    salida/         adaptadores hacia otros módulos (por su api)
-    configuracion/  @Configuration que crea los beans del módulo
-```
+## Responsabilidades del backend
 
-`ArquitecturaTest` (ArchUnit) hace cumplir: un módulo solo usa la `api` de otro, `compartido` no depende de
-ningún módulo, sin ciclos, dominio/aplicación sin Spring ni JDBC, controladores solo con puertos de entrada,
-puertos = interfaces, sin JPA, JDBC solo en persistencia y Firebase solo en seguridad.
+- Lógica de negocio y acceso a datos (patrón MVC).
+- Módulos internos: **Ingresos**, **Egresos**, **Inventario**, **Nómina** y **Reportes**.
+- Integración con servicios externos vía API: autenticación, gestión de usuarios, alertas/notificaciones e IA.
+- Validaciones del lado del servidor (montos negativos, registros incompletos, duplicados).
 
-## Mensajes (nada quemado)
+## Decisiones de arquitectura (ADR)
 
-* Todos los textos para el usuario están en `src/main/resources/i18n/mensajes.properties`.
-* El código solo usa **claves**: enums `MensajesCompartidos`, `MensajesIngresos`, `MensajesEgresos`, `MensajesMovimientos`.
-  Las excepciones reciben la clave (`new ReglaNegocioException(MensajesEgresos.MONTO_INVALIDO)`), nunca un texto.
-* Las validaciones de los request usan claves: `@NotNull(message = "{validacion.egreso.monto.obligatorio}")`.
-* `MensajesTest` falla si falta una clave, si está vacía o si sobra una que nadie usa.
-* Errores en formato RFC 9457, con `codigo` para que el frontend no dependa del texto:
+| ADR | Decisión | Spike |
+| --- | --- | --- |
+| [ADR-0001](doc/adr/adr-0001.md) | Autenticación delegada a **Firebase Authentication**; aislamiento por `id_cafeteria` (custom claim + RLS) | [SPIKE-01](doc/spikes/spike-01.md), [SPIKE-03](doc/spikes/spike-03.md) |
+| [ADR-0002](doc/adr/adr-0002.md) | Todo movimiento financiero se registra dentro de una **transacción** (todo o nada) | — |
+| [ADR-0003](doc/adr/adr-0003.md) | Categorías como entidad propia por cafetería, con archivado (no borrado) | — |
+| [ADR-0004](doc/adr/adr-0004.md) | Reportes y dashboard con **consultas agregadas indexadas** en la base de datos | [SPIKE-06](doc/spikes/spike-06.md) |
+| [ADR-0005](doc/adr/adr-0005.md) | Hosting con reinicio automático y monitoreo; alertas en tiempo real con **Firebase Cloud Messaging** | [SPIKE-04](doc/spikes/spike-04.md) |
+| [ADR-0006](doc/adr/adr-0006.md) | **Monolito sin estado** (stateless) en lugar de microservicios | — |
+| [ADR-0007](doc/adr/adr-0007.md) | `registrado_por_id` y `fecha_hora` se capturan **automáticamente en el backend** | — |
+| [ADR-0008](doc/adr/adr-0008.md) | Interfaz con accesos directos, deshacer y **asistente de IA** en lenguaje natural | [SPIKE-02](doc/spikes/spike-02.md) |
+| [ADR-0009](doc/adr/adr-0009.md) | Punto de venta operable con **teclado, mouse y pantalla táctil** | — |
+| [ADR-0010](doc/adr/adr-0010.md) | Compatibilidad con **Chrome, Firefox y Edge** mediante estándares web | — |
+| [ADR-0011](doc/adr/adr-0011.md) | IA, notificaciones y exportación vía proveedores externos; **sin pasarela de pagos** | [SPIKE-02](doc/spikes/spike-02.md), [SPIKE-05](doc/spikes/spike-05.md) |
+| [ADR-0012](doc/adr/adr-0012.md) | Base de datos **PostgreSQL** con **Row Level Security**, en Cloud SQL | [SPIKE-03](doc/spikes/spike-03.md) |
+| [ADR-0013](doc/adr/adr-0013.md) | Proveedor de nube: **Google Cloud Platform** | — |
+| [ADR-0014](doc/adr/adr-0014.md) | Secretos centralizados en **Google Cloud Secret Manager** | — |
 
-```json
-{ "status": 422, "title": "Regla de negocio", "detail": "El monto debe ser mayor que 0.",
-  "codigo": "egresos.monto.invalido", "instante": "2026-10-14T23:00:00Z" }
-```
+## Reglas no negociables
 
-## Endpoints
+1. Toda consulta se filtra por `id_cafeteria` (middleware + RLS en PostgreSQL).
+2. La autorización por rol (Administrador / Cajero) se valida en el backend antes de cada acción.
+3. El backend es *stateless* y usa un pool de conexiones a la base de datos.
+4. Los reportes se calculan siempre desde la tabla de movimientos (única fuente de verdad).
+5. El repositorio no contiene secretos: `.env` está en `.gitignore` y solo se versiona un `.env.example` sin valores (ADR-0014).
 
-Todos bajo `/api`, con `Authorization: Bearer <token de Firebase>`. La cafetería, el usuario y la fecha
-los pone el servidor, nunca el navegador.
+## Stack
 
-| Método y ruta | Quién | Respuesta |
-|---|---|---|
-| `GET /api/catalogo/productos` | todos | productos vendibles con sus adiciones permitidas |
-| `GET /api/catalogo/categorias?tipo=EGRESO` | todos | categorías activas |
-| `POST /api/ingresos` | cajero, admin | 201 venta con total calculado en el servidor |
-| `POST /api/ingresos/{idVenta}/deshacer` | quien la registró, ≤ 60 s | venta anulada |
-| `POST /api/egresos` | admin | 201 egreso |
-| `GET /api/movimientos?desde=&hasta=&tipo=&idCategoria=&pagina=&tamano=` | admin ve todo, cajero solo lo suyo | lista + totales + página |
-| `GET /actuator/health` | público | estado del servicio |
+- Base de datos: PostgreSQL (Cloud SQL, GCP)
+- Autenticación: Firebase Authentication
+- Notificaciones: Firebase Cloud Messaging
+- Nube: Google Cloud Platform · Secretos: Google Cloud Secret Manager
+- Lenguaje / framework: *por definir* (Node.js propuesto en los ADR)
 
-Ejemplo de venta: `{"items":[{"idProducto":"b0000000-0000-0000-0000-000000000003","cantidad":1,"adiciones":[{"idProducto":"b0000000-0000-0000-0000-000000000011"}]}]}`
+## Equipo
 
-## Cómo correrlo en tu PC
-
-1. **Base de datos (pgAdmin)**: si ya la tienes del otro backend, no hagas nada; es la misma.
-   Si no: crea la base `jjskaffee`, abre Query Tool y ejecuta `db/jjskaffee_completo.sql`.
-   Opcional: `db/verificar_jjskaffee.sql` debe mostrar OK 1 … OK 9.
-2. Copia `.env.example` como `.env` y pon `JJSKAFFEE_DB_CONTRASENA` (en desarrollo: la del script).
-3. En IntelliJ: Run configuration de `JjSkafeeModularApplication` con **Active profiles = `local`**.
-4. Prueba sin Firebase (solo perfil local, modo desarrollo):
-   `Authorization: Bearer dev:11111111-1111-1111-1111-111111111111:firebase-cajero-demo`
-   (o `firebase-admin-demo` para el administrador).
-
-> El backend hexagonal y este usan el puerto 8080: no los corras al tiempo, o agrega la línea `server.port=8081`
-> al `.env`.
-
-## Pruebas, ArchUnit y Trivy
-
-```bash
-./mvnw verify                      # unitarias + ArquitecturaTest + MensajesTest
-trivy fs --config trivy.yaml .     # mismo criterio que en GitHub (falla con CRITICAL/HIGH o secretos)
-```
-
-Pruebas de integración contra tu PostgreSQL (se omiten si no defines las variables; cada prueba se revierte,
-así que no ensucian tu base):
-
-```bash
-JJSKAFFEE_PRUEBAS_DB_URL=jdbc:postgresql://localhost:5432/jjskaffee?currentSchema=jjskaffee
-JJSKAFFEE_PRUEBAS_DB_USUARIO=app_jjskaffee
-JJSKAFFEE_PRUEBAS_DB_CONTRASENA=...
-```
-
-GitHub Actions (`.github/workflows/calidad-seguridad.yml`):
-* **Pruebas**: levanta `postgres:17`, carga `db/jjskaffee_completo.sql`, corre `db/verificar_jjskaffee.sql`
-  y luego `./mvnw verify` en Java 27 (incluye integración y aislamiento A/B).
-* **Trivy** `aquasecurity/trivy-action@v0.36.0` con Trivy `v0.75.0`: SARIF a Security + paso que falla con CRITICAL/HIGH/secretos.
-* **CodeQL** con `build-mode: none` (CodeQL aún no lista Java 27).
-* `dependabot.yml` para Maven y Actions. Los overrides de `tomcat.version` y `jackson-bom.version` del `pom.xml`
-  son los mismos que pidió Trivy en el backend hexagonal.
-
-## HTTPS
-
-El backend **no termina TLS por sí mismo**, y así debe ser: el certificado lo pone el proveedor
-y la aplicación recibe HTTP plano en `$PORT`. Lo único que necesita es creerle al proxy, y eso ya
-está en `application.yml`:
-
-```yaml
-server:
-  port: ${PORT:8080}
-  forward-headers-strategy: framework   # respeta X-Forwarded-Proto -> las URLs salen en https
-```
-
-Sin esa línea, la cabecera `Location` de un 201 y el campo `instance` de los errores saldrían en
-`http://` y el navegador los bloquearía por contenido mixto.
-
-### En Cloud Run (producción)
-
-`https://<servicio>-<hash>.run.app` con certificado administrado por Google: no hay que comprarlo
-ni renovarlo. El `Dockerfile` (multi-etapa, usuario sin privilegios, JRE sin compilador) y
-`.github/workflows/despliegue.yml` ya están listos. Antes del primer despliegue hay que crear los
-secretos y variables que ese archivo documenta en su encabezado.
-
-### En tu PC (opcional, perfil `https`)
-
-Genera una sola vez el certificado autofirmado, en la raíz del proyecto:
-
-```bash
-keytool -genkeypair -alias jjskaffee-local -keyalg RSA -keysize 2048 \
-  -storetype PKCS12 -keystore certificado-local.p12 -validity 365 \
-  -storepass cambiar_en_desarrollo \
-  -dname "CN=localhost, OU=JJSKaffee, O=UCO, L=Rionegro, ST=Antioquia, C=CO" \
-  -ext "SAN=dns:localhost,ip:127.0.0.1"
-```
-
-Luego corre con **Active profiles: `local,https`** y el backend queda en `https://localhost:8443`.
-El navegador avisa que el certificado no es de confianza (lo firmaste tú): se acepta y sigue.
-El `.p12` está en el `.gitignore`: cada quien genera el suyo, nunca se sube.
-
-## Trazabilidad y observabilidad
-
-* `spring-boot-starter-opentelemetry` pone `traceId`/`spanId` en el MDC; `FiltroAutenticacion` agrega
-  `idCafeteria`, `idUsuario` y `rol`. Cada línea de log queda así: `[traceId,spanId] [caf=… usr=… rol=…]`.
-* Fechas en UTC-0: JVM, `Clock.systemUTC()`, sesión de Hikari y el rol de la BD.
-
-## Diferencias con el backend hexagonal
-
-* Mismo dominio y mismas reglas; ahora organizado por módulos con fronteras verificadas.
-* Deshacer una venta ahora guarda `usuario_autorizador` y `anulada_en`, que el CHECK de la tabla `venta` exige.
-* Los textos salieron del código a `mensajes.properties` (incluida la descripción "Venta" de los movimientos).
-* La consulta de movimientos calcula totales con `SUM … FILTER` en la BD y pagina (ADR-0004).
-* Pendiente igual que en el otro: la anulación por el administrador después de 60 s y RF15/RF28 (editar/eliminar).
+JJSKaffee — Proyecto de Ingeniería de Software II.

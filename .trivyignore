@@ -1,3 +1,0 @@
-# Hallazgos de Trivy aceptados conscientemente, uno por línea, con su justificación y fecha.
-# Ejemplo:
-# CVE-2026-00000  # sin parche aún; no aplica porque no usamos X (revisar el 2026-11-01)

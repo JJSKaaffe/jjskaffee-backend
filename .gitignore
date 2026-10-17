@@ -4,27 +4,43 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### Secretos: nunca al repositorio (ADR-0014) ###
-.env
-*.pem
-*-firebase-adminsdk-*.json
-credenciales*.json
-# Certificado autofirmado para https en tu PC: cada quien genera el suyo
-*.p12
-*.jks
-
-### Reportes locales ###
-trivy.sarif
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
 
 ### IntelliJ IDEA ###
-.idea/
+.idea
 *.iws
 *.iml
 *.ipr
 
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
 ### VS Code ###
 .vscode/
 
-### Mac / Windows ###
-.DS_Store
-Thumbs.db
+### Trivy ###
+reporte-trivy.txt
+
+### Secretos (ADR-0014): nunca se suben ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*-firebase-adminsdk-*.json
+service-account*.json
+/target-test.log
