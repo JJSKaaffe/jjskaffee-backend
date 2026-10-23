@@ -1,6 +1,7 @@
 package co.edu.uco.jjskafee.movimientos.servicios.casouso;
 
 import co.edu.uco.jjskafee.compartido.dominio.UsuarioAutenticado;
+import co.edu.uco.jjskafee.compartido.dominio.enums.Permiso;
 import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
 import co.edu.uco.jjskafee.movimientos.dominio.FiltroMovimientos;
 import co.edu.uco.jjskafee.movimientos.dominio.ResultadoMovimientos;
@@ -25,8 +26,8 @@ public class ConsultarMovimientos implements ConsultarMovimientosUseCase {
 
     @Override
     public MovimientosResponse consultar(FiltroMovimientosRequest solicitud, UsuarioAutenticado usuario) {
-        // RF9: el administrador ve todo; el cajero solo lo que él registró
-        UUID soloDelUsuario = usuario.esAdministrador() ? null : usuario.id();
+        // RF9: el administrador ve todo; el cajero solo lo que él registró (ventas, ingresos libres y egresos)
+        UUID soloDelUsuario = usuario.tienePermiso(Permiso.VER_TODOS_LOS_MOVIMIENTOS) ? null : usuario.id();
 
         FiltroMovimientos filtro = new FiltroMovimientos(solicitud.desde(), solicitud.hasta(), solicitud.tipo(),
                 solicitud.idCategoria(), soloDelUsuario, solicitud.paginaOCero(), solicitud.tamanoOPorDefecto());

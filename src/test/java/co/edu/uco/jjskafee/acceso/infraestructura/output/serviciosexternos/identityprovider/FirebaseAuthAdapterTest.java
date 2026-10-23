@@ -1,8 +1,6 @@
 package co.edu.uco.jjskafee.acceso.infraestructura.output.serviciosexternos.identityprovider;
 
-import co.edu.uco.jjskafee.acceso.infraestructura.output.repositorios.estructurados.PgUsuarioRepository;
 import co.edu.uco.jjskafee.compartido.dominio.excepciones.NoAutenticadoException;
-import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
@@ -11,10 +9,6 @@ import com.google.firebase.auth.FirebaseAuth;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.UUID;
-import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,15 +24,8 @@ class FirebaseAuthAdapterTest {
                 .setProjectId("jjskaffee-prueba")
                 .setCredentials(GoogleCredentials.create(new AccessToken("prueba", null)))
                 .build(), "prueba-adaptador");
-        // La BD nunca se toca: si se llegara a usar, la prueba fallaría por la operación sin implementar
-        UnidadDeTrabajo sinBaseDeDatos = new UnidadDeTrabajo() {
-            @Override
-            public <T> T ejecutar(UUID idCafeteria, Supplier<T> operacion) {
-                return fail("No debe consultar usuarios con un token inválido");
-            }
-        };
-        adaptador = new FirebaseAuthAdapter(FirebaseAuth.getInstance(app), sinBaseDeDatos,
-                new PgUsuarioRepository(new JdbcTemplate()));
+        // El adaptador ya no consulta la BD: solo verifica el token y devuelve el uid (ADR-0016)
+        adaptador = new FirebaseAuthAdapter(FirebaseAuth.getInstance(app));
     }
 
     @AfterAll

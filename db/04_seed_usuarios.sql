@@ -9,7 +9,8 @@
 -- Para probar la API con tu cuenta real de Firebase, cambia el firebase_uid
 -- de un usuario por tu uid (Firebase Console > Authentication > Users):
 --   UPDATE usuarios SET firebase_uid = '<tu uid>' WHERE id = 'a0000000-0000-0000-0000-000000000001';
--- y pon en tu token el custom claim id_cafeteria de esa misma cafetería.
+-- y manda en cada petición el encabezado X-Cafeteria-Id con esa misma cafetería
+-- (desde 07_multicafeteria.sql el token ya no lleva el custom claim id_cafeteria).
 -- =====================================================================
 
 BEGIN;

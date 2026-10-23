@@ -57,6 +57,10 @@ jobs:
           psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/04_seed_usuarios.sql
           psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/05_cafeteria_activa_e_idempotencia.sql
           psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/06_seed_cafeteria_inactiva.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/07_multicafeteria.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/08_seed_multicafeteria.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/09_ingresos_libres.sql
+          psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/10_seed_categorias_ingreso.sql
           {
             echo "JJSKAFFEE_DB_URL=jdbc:postgresql://localhost:5432/jjskaffee"
             echo "JJSKAFFEE_DB_USUARIO=app_jjskaffee"

@@ -9,5 +9,8 @@ public final class AtributosDePeticion {
     /** Atributo donde FirebaseAuthFilter deja el UsuarioAutenticado (lo leen los controllers). */
     public static final String USUARIO = "jjskaffee.usuarioAutenticado";
 
+    /** Atributo con la identidad (uid) en las rutas que no llevan cafetería, como GET /acceso/cafeterias. */
+    public static final String IDENTIDAD = "jjskaffee.identidad";
+
     private AtributosDePeticion() { }
 }

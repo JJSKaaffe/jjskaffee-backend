@@ -25,6 +25,11 @@ public class Categoria {
         return tipo == TipoCategoria.EGRESO && !archivada;
     }
 
+    /** Un ingreso libre solo se puede registrar en una categoría de tipo INGRESO que no esté archivada. */
+    public boolean esIngresoActiva() {
+        return tipo == TipoCategoria.INGRESO && !archivada;
+    }
+
     public UUID getId() { return id; }
     public String getNombre() { return nombre; }
     public TipoCategoria getTipo() { return tipo; }

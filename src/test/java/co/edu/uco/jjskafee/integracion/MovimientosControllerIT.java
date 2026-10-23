@@ -47,7 +47,7 @@ class MovimientosControllerIT {
 
     @Test
     void elAdministradorRegistraUnEgreso() throws Exception {
-        mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(post("/egresos").headers(sesion(TOKEN_ADMIN))
                         .contentType(MediaType.APPLICATION_JSON).content(egreso(INSUMOS.getId(), "38000")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idEgreso").isNotEmpty())
@@ -59,7 +59,7 @@ class MovimientosControllerIT {
 
     @Test
     void elCajeroNoPuedeRegistrarEgresos() throws Exception {
-        mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/egresos").headers(sesion(TOKEN_CAJERO))
                         .contentType(MediaType.APPLICATION_JSON).content(egreso(INSUMOS.getId(), "38000")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.detail").value("Solo el administrador puede registrar egresos"));
@@ -67,7 +67,7 @@ class MovimientosControllerIT {
 
     @Test
     void unEgresoConDatosInvalidosResponde400ConLosCampos() throws Exception {
-        mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(post("/egresos").headers(sesion(TOKEN_ADMIN))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idCategoria": null, "monto": -5, "descripcion": ""}"""))
@@ -79,7 +79,7 @@ class MovimientosControllerIT {
 
     @Test
     void unaCategoriaArchivadaResponde422() throws Exception {
-        mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(post("/egresos").headers(sesion(TOKEN_ADMIN))
                         .contentType(MediaType.APPLICATION_JSON).content(egreso(ARCHIVADA.getId(), "1000")))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.detail").value("La categoría debe ser de egreso y estar activa"));
@@ -87,14 +87,14 @@ class MovimientosControllerIT {
 
     @Test
     void laCategoriaDeOtraCafeteriaNoExiste() throws Exception {
-        mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(post("/egresos").headers(sesion(TOKEN_ADMIN))
                         .contentType(MediaType.APPLICATION_JSON).content(egreso(INSUMOS_B.getId(), "1000")))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void elTotalDeLaVentaLoCalculaElServidorEIgnoraElDelNavegador() throws Exception {
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"total": 1,
@@ -111,7 +111,7 @@ class MovimientosControllerIT {
 
     @Test
     void quienVendioPuedeDeshacerLaVenta() throws Exception {
-        MvcResult venta = mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        MvcResult venta = mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"items": [{"idProducto": "%s", "cantidad": 2}]}""".formatted(PANDEBONO.getId())))
@@ -119,11 +119,11 @@ class MovimientosControllerIT {
                 .andReturn();
         String idVenta = venta.getResponse().getContentAsString().replaceAll(".*\"idVenta\":\"([^\"]+)\".*", "$1");
 
-        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).header("Authorization", bearer(TOKEN_ADMIN)))
+        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).headers(sesion(TOKEN_ADMIN)))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).header("Authorization", bearer(TOKEN_CAJERO_B)))
+        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).headers(sesion(TOKEN_CAJERO_B)))
                 .andExpect(status().isNotFound());
-        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).header("Authorization", bearer(TOKEN_CAJERO)))
+        mvc.perform(post("/ingresos/{id}/deshacer", idVenta).headers(sesion(TOKEN_CAJERO)))
                 .andExpect(status().isNoContent());
     }
 
@@ -142,12 +142,12 @@ class MovimientosControllerIT {
     void laMismaIdempotencyKeyDevuelveLaMismaVenta() throws Exception {
         String clave = UUID.randomUUID().toString();
 
-        MvcResult primera = mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        MvcResult primera = mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .header("Idempotency-Key", clave)
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("2")))
                 .andExpect(status().isCreated())
                 .andReturn();
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .header("Idempotency-Key", clave)
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("2")))
                 .andExpect(status().isCreated())
@@ -158,12 +158,12 @@ class MovimientosControllerIT {
     @Test
     void laMismaIdempotencyKeyConOtroCuerpoResponde422() throws Exception {
         String clave = UUID.randomUUID().toString();
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .header("Idempotency-Key", clave)
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1")))
                 .andExpect(status().isCreated());
 
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .header("Idempotency-Key", clave)
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("3")))
                 .andExpect(status().isUnprocessableContent())
@@ -173,7 +173,7 @@ class MovimientosControllerIT {
 
     @Test
     void unaIdempotencyKeyQueNoEsUuidResponde400() throws Exception {
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .header("Idempotency-Key", "no-es-un-uuid")
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1")))
                 .andExpect(status().isBadRequest());
@@ -181,7 +181,7 @@ class MovimientosControllerIT {
 
     @Test
     void unaCantidadMayorA99Responde400ConElCampo() throws Exception {
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("100")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores['items[0].cantidad']").value("La cantidad máxima es 99"));
@@ -189,14 +189,14 @@ class MovimientosControllerIT {
 
     @Test
     void unaCantidadConDecimalesResponde400EnVezDeTruncarse() throws Exception {
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO))
                         .contentType(MediaType.APPLICATION_JSON).content(pandebonos("1.5")))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void unaCafeteriaInactivaResponde422() throws Exception {
-        mvc.perform(post("/ingresos").header("Authorization", bearer(TOKEN_CAJERO_INACTIVA))
+        mvc.perform(post("/ingresos").headers(sesion(TOKEN_CAJERO_INACTIVA))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"items": [{"idProducto": "%s", "cantidad": 1}]}""".formatted(TINTO_INACTIVA.getId())))
@@ -207,12 +207,12 @@ class MovimientosControllerIT {
     @Test
     void consultaMovimientosPaginadosConTotales() throws Exception {
         for (int i = 0; i < 3; i++) {
-            mvc.perform(post("/egresos").header("Authorization", bearer(TOKEN_ADMIN))
+            mvc.perform(post("/egresos").headers(sesion(TOKEN_ADMIN))
                             .contentType(MediaType.APPLICATION_JSON).content(egreso(INSUMOS.getId(), "1000")))
                     .andExpect(status().isCreated());
         }
 
-        mvc.perform(get("/movimientos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(get("/movimientos").headers(sesion(TOKEN_ADMIN))
                         .param("desde", DIA_PRUEBA.toString()).param("hasta", DIA_PRUEBA.toString())
                         .param("tipo", "EGRESO").param("pagina", "0").param("tamano", "2"))
                 .andExpect(status().isOk())
@@ -222,7 +222,7 @@ class MovimientosControllerIT {
                 .andExpect(jsonPath("$.totales.balance").value(-3000));
 
         // La cafetería B no ve nada de A
-        mvc.perform(get("/movimientos").header("Authorization", bearer(TOKEN_ADMIN_B))
+        mvc.perform(get("/movimientos").headers(sesion(TOKEN_ADMIN_B))
                         .param("desde", DIA_PRUEBA.toString()).param("hasta", DIA_PRUEBA.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalMovimientos").value(0));
@@ -230,13 +230,13 @@ class MovimientosControllerIT {
 
     @Test
     void filtrosInvalidosResponden400() throws Exception {
-        mvc.perform(get("/movimientos").header("Authorization", bearer(TOKEN_ADMIN)).param("tamano", "51"))
+        mvc.perform(get("/movimientos").headers(sesion(TOKEN_ADMIN)).param("tamano", "51"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.tamano").value("El tamaño máximo es 50"));
-        mvc.perform(get("/movimientos").header("Authorization", bearer(TOKEN_ADMIN)).param("tipo", "OTRO"))
+        mvc.perform(get("/movimientos").headers(sesion(TOKEN_ADMIN)).param("tipo", "OTRO"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.tipo").value("Valor no válido"));
-        mvc.perform(get("/movimientos").header("Authorization", bearer(TOKEN_ADMIN))
+        mvc.perform(get("/movimientos").headers(sesion(TOKEN_ADMIN))
                         .param("desde", "2026-10-10").param("hasta", "2026-10-01"))
                 .andExpect(status().isUnprocessableContent());
     }

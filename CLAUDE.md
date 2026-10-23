@@ -26,7 +26,11 @@ Scripts en `db/` (se corren a mano en pgAdmin y en CI, en orden). No hay herrami
 - `03_seed_cafeterias_y_catalogo.sql` y `04_seed_usuarios.sql`: cafeterías A y B con los UUID de `DatosPrueba`.
 - `05_cafeteria_activa_e_idempotencia.sql`: `cafeteria.activo`, `venta.clave_idempotencia` + `hash_solicitud` con UNIQUE por cafetería.
 - `06_seed_cafeteria_inactiva.sql`: cafetería C inactiva.
-- Planeados en la rama `feature/monolito-modular-ingresos`: `07_multicafeteria.sql` (migración), `08_seed_multicafeteria.sql`, `09_ingresos_libres.sql` (migración), `10_seed_categorias_ingreso.sql`. Al crearlos, actualiza esta lista y `.github/workflows/seguridad.yml`.
+- `07_multicafeteria.sql`: membresías con UNIQUE `(id_cafeteria, firebase_uid)`, `app.current_uid` + `app_uid_actual()`, políticas de solo lectura por uid en `usuarios` y `cafeteria`, `SELECT (nombre)` sobre `cafeteria`.
+- `08_seed_multicafeteria.sql`: Laura también es CAJERO en la cafetería B.
+- `09_ingresos_libres.sql`: tabla `ingreso_libre` (RLS forzado, FK compuestas, idempotencia, borrado lógico) y `v_movimiento` con los ingresos libres como INGRESO.
+- `10_seed_categorias_ingreso.sql`: dos categorías de INGRESO activas y una archivada en la cafetería A.
+- Un script nuevo de BD se agrega a esta lista y a `.github/workflows/seguridad.yml` en la misma fase en que se crea.
 
 Los nombres de tabla siguen el MER del equipo. La tabla `usuarios` guarda **membresías**: una fila por persona y cafetería, con su rol (UNIQUE `(id_cafeteria, firebase_uid)`). Las tablas de catálogo, `usuarios` y `cafeteria` son de solo lectura para la app; no hay `DELETE` en ninguna tabla.
 
@@ -56,7 +60,7 @@ Entre módulos:
 
 `ArquitecturaTest` verifica todo lo anterior. Si un cambio rompe `ArquitecturaTest`, el cambio está mal, no la prueba; nunca se debilita una regla para que pase.
 
-**Estado**: en `main` el código todavía está en paquetes por capa (`dominio`, `servicios`, `infraestructura` en la raíz), con dominio, casos de uso, puertos, DTOs, infraestructura y pruebas unitarias y de integración funcionando. La reorganización en módulos, la multi-cafetería y los ingresos libres se hacen en la rama `feature/monolito-modular-ingresos`. Pendiente: perfil `gcp` (Cloud Run + Cloud SQL) y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno.
+**Estado**: en la rama `feature/monolito-modular-ingresos` el código ya está organizado en los módulos de arriba (ADR-0015), con multi-cafetería por encabezado y membresías (ADR-0016), ingresos libres, catálogo de venta y el flujo completo de registrar ingreso probado por HTTP (`FlujoRegistrarIngresoIT`). `main` todavía tiene la versión por capas hasta que Joel haga el merge. Colección de Postman del flujo en `docs/postman/`. Pendiente: perfil `gcp` (Cloud Run + Cloud SQL) y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno. Anular ingresos libres (hay columnas `anulado`/`motivo_anulacion`, sin caso de uso ni `GRANT UPDATE` todavía).
 
 Detalle de capas, adaptadores pendientes y recorrido de una petición:
 @docs/arquitectura/backend-hexagonal.md

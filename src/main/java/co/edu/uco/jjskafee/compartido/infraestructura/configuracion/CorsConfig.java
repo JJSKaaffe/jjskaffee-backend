@@ -1,5 +1,6 @@
 package co.edu.uco.jjskafee.compartido.infraestructura.configuracion;
 
+import co.edu.uco.jjskafee.compartido.infraestructura.input.Encabezados;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -24,7 +25,7 @@ public class CorsConfig implements WebMvcConfigurer {
             registro.addMapping("/**")
                     .allowedOrigins(origenes)
                     .allowedMethods("GET", "POST")
-                    .allowedHeaders("Authorization", "Content-Type");
+                    .allowedHeaders("Authorization", "Content-Type", Encabezados.IDEMPOTENCIA, Encabezados.CAFETERIA);
         }
     }
 }

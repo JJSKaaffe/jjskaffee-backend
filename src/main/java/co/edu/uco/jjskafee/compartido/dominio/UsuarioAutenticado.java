@@ -1,13 +1,15 @@
 package co.edu.uco.jjskafee.compartido.dominio;
 
+import co.edu.uco.jjskafee.compartido.dominio.enums.Permiso;
 import co.edu.uco.jjskafee.compartido.dominio.enums.Rol;
 
 import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Quién está haciendo la petición. Se arma a partir del token de Firebase,
- * nunca con datos que mande el navegador (ADR-0001, ADR-0007).
+ * Quién está haciendo la petición y en qué cafetería. La identidad sale del token de Firebase;
+ * la cafetería, del encabezado X-Cafeteria-Id, y el id, nombre y rol, de su membresía en esa
+ * cafetería (tabla usuarios). Nunca con datos del cuerpo de la petición (ADR-0007, ADR-0016).
  */
 public record UsuarioAutenticado(UUID id, UUID idCafeteria, String nombre, Rol rol) {
 
@@ -19,5 +21,9 @@ public record UsuarioAutenticado(UUID id, UUID idCafeteria, String nombre, Rol r
 
     public boolean esAdministrador() {
         return rol == Rol.ADMINISTRADOR;
+    }
+
+    public boolean tienePermiso(Permiso permiso) {
+        return rol.tiene(permiso);
     }
 }

@@ -18,7 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Una venta = un ingreso de la cafetería (RF24–RF27). En esta versión todo ingreso es una venta.
+ * Una venta de productos del menú (RF24–RF27). Un ingreso es una venta o un ingreso libre (IngresoLibre).
  * El total SIEMPRE se calcula aquí con los precios del catálogo;
  * nunca se acepta un total enviado por el navegador.
  */

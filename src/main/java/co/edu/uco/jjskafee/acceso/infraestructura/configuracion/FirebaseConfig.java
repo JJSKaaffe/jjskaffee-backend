@@ -1,9 +1,7 @@
 package co.edu.uco.jjskafee.acceso.infraestructura.configuracion;
 
-import co.edu.uco.jjskafee.acceso.infraestructura.output.repositorios.estructurados.PgUsuarioRepository;
 import co.edu.uco.jjskafee.acceso.infraestructura.output.serviciosexternos.identityprovider.FirebaseAuthAdapter;
 import co.edu.uco.jjskafee.acceso.servicios.output.ports.VerificadorDeToken;
-import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -12,7 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -51,9 +48,8 @@ public class FirebaseConfig {
     }
 
     @Bean
-    public VerificadorDeToken verificadorDeToken(FirebaseAuth firebaseAuth, UnidadDeTrabajo unidadDeTrabajo,
-                                                 JdbcTemplate jdbc) {
-        return new FirebaseAuthAdapter(firebaseAuth, unidadDeTrabajo, new PgUsuarioRepository(jdbc));
+    public VerificadorDeToken verificadorDeToken(FirebaseAuth firebaseAuth) {
+        return new FirebaseAuthAdapter(firebaseAuth);
     }
 
     private static GoogleCredentials credenciales(String ruta) throws IOException {

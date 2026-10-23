@@ -15,12 +15,8 @@ import co.edu.uco.jjskafee.ingresos.servicios.input.ports.RegistrarIngresoUseCas
 import co.edu.uco.jjskafee.ingresos.servicios.output.ports.CafeteriaRepository;
 import co.edu.uco.jjskafee.ingresos.servicios.output.ports.VentaRepository;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +26,7 @@ import java.util.UUID;
 /**
  * Caso de uso: registrar una venta con productos y adiciones (RF24–RF27)
  * y deshacerla dentro de los 60 segundos (ADR-0008).
- * En esta versión todo ingreso se registra como una venta de productos del menú.
+ * Los ingresos libres (monto + categoría) van por otro caso de uso: RegistrarIngresoLibre.
  */
 public class RegistrarIngreso implements RegistrarIngresoUseCase {
 
@@ -112,12 +108,7 @@ public class RegistrarIngreso implements RegistrarIngresoUseCase {
             }
             texto.append(';');
         }
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256").digest(texto.toString().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 no está disponible", e);   // toda JVM lo trae
-        }
+        return HuellaDeSolicitud.sha256(texto.toString());
     }
 
     /** Convierte las adiciones del request en productos; si una se repite, suma las cantidades. */

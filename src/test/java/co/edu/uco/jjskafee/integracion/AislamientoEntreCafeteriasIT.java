@@ -139,9 +139,12 @@ class AislamientoEntreCafeteriasIT {
     void unUsuarioSoloSeEncuentraDentroDeSuCafeteria() {
         PgUsuarioRepository usuarios = new PgUsuarioRepository(jdbc);
 
+        assertEquals(CAJERO, unidadDeTrabajo.ejecutar(CAFETERIA, () -> usuarios.buscarActivoPorFirebaseUid(UID_CAJERO)).orElseThrow());
+        // Elegir la cafetería B no sirve para alguien que solo pertenece a A
+        assertTrue(unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_CAJERO)).isEmpty());
+        // Quien pertenece a las dos tiene en cada una su propia membresía y su propio rol (db/08)
         assertEquals(ADMIN, unidadDeTrabajo.ejecutar(CAFETERIA, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).orElseThrow());
-        // Un token que diga ser de la cafetería B no sirve para un usuario de A
-        assertTrue(unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).isEmpty());
+        assertEquals(LAURA_EN_B, unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).orElseThrow());
     }
 
     // ----- La configuración de la BD que hace posible lo anterior -----

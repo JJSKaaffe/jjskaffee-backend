@@ -19,7 +19,7 @@ import static co.edu.uco.jjskafee.compartido.infraestructura.output.repositorios
 import static co.edu.uco.jjskafee.compartido.infraestructura.output.repositorios.estructurados.ConversionesSql.leerInstante;
 
 /**
- * Consulta la vista v_movimiento (ventas confirmadas + egresos no anulados).
+ * Consulta la vista v_movimiento (ventas confirmadas, ingresos libres y egresos no anulados; db/09).
  * Hace dos consultas: los totales con SUM sobre todo el filtro y la página pedida (ADR-0004).
  */
 public class PgMovimientoRepository implements MovimientoRepository {

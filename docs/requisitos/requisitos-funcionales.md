@@ -12,7 +12,7 @@
 - **RF6**: El sistema valida que las credenciales sean correctas.
 
 ## Multi-tenant (aislamiento por cafetería)
-- **RF7**: Cada usuario (administrador y cajero) está asociado a una única cafetería.
+- **RF7**: Cada usuario (administrador o cajero) pertenece a una o varias cafeterías, con un rol en cada una; en cada petición actúa en una sola, la que eligió. *(Actualizado por ADR-0016; antes: "asociado a una única cafetería".)*
 - **RF8**: El administrador solo consulta y gestiona información de su propia cafetería.
 - **RF9** ★: El cajero solo registra y consulta movimientos de la cafetería a la que pertenece.
 - **RF10**: El administrador edita la información de su cafetería (nombre, dirección).

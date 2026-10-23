@@ -75,9 +75,10 @@ class RegistrarIngresoValidacionesIT {
     // Un error SQL aborta la transacción de la prueba: por eso cada permiso va en su propia prueba
 
     @Test
-    void laAppSoloPuedeLeerIdYActivoDeLaCafeteria() {
+    void laAppSoloPuedeLeerIdActivoYNombreDeLaCafeteria() {
+        // db/07 agregó SELECT (nombre) para la lista de cafeterías del usuario; creada_en sigue sin permiso
         DataAccessException e = assertThrows(DataAccessException.class, () -> unidadDeTrabajo.ejecutar(CAFETERIA,
-                () -> jdbc.queryForObject("SELECT nombre FROM cafeteria WHERE id = ?", String.class, CAFETERIA)));
+                () -> jdbc.queryForObject("SELECT creada_en FROM cafeteria WHERE id = ?", Object.class, CAFETERIA)));
         assertEquals("42501", sqlState(e));   // insufficient_privilege
     }
 
