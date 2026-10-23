@@ -1,0 +1,355 @@
+{
+  "info": {
+    "name": "JJSKaffee · Registrar ingreso",
+    "_postman_id": "6f0f6a52-3c1e-4b8e-9d55-2f6a1b0c9e11",
+    "description": "Flujo de registrar ingreso (ADR-0016): login → ver mis cafeterías y elegir una → rol en esa cafetería → catálogo → registrar venta e ingreso libre → ver los movimientos con los totales.\n\nVariables:\n- baseUrl: http://localhost:8080 en local (sin /api). Detrás del API Gateway: https://<gateway>/api.\n- token: ID token de Firebase. Pégalo a mano o usa la petición 0 (llena firebaseApiKey, email y password).\n- idCafeteria: la cafetería elegida. Si está vacía, la petición 1 pone la primera donde eres ADMINISTRADOR (o la primera de la lista). Para probar otra cafetería, cámbiala a mano.\n\nLas demás variables (idProducto, idAdicion, idCategoriaIngreso, idVenta, idIngresoLibre, hoy) las llenan los scripts.\n\nPara que tu usuario real de Firebase tenga cafeterías, su uid debe estar en la tabla usuarios (ver el encabezado de db/04_seed_usuarios.sql). Con el seed, uid-prueba-laura es ADMINISTRADORA en la cafetería A y CAJERA en la B; uid-prueba-andres es CAJERO en la A.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fecha de hoy en hora de Colombia (UTC-5), para filtrar los movimientos",
+          "const hoy = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);",
+          "pm.collectionVariables.set('hoy', hoy);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Login en Firebase (opcional)",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"returnSecureToken\": true\n}"
+        },
+        "url": {
+          "raw": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{firebaseApiKey}}",
+          "protocol": "https",
+          "host": [ "identitytoolkit", "googleapis", "com" ],
+          "path": [ "v1", "accounts:signInWithPassword" ],
+          "query": [ { "key": "key", "value": "{{firebaseApiKey}}" } ]
+        },
+        "description": "Inicia sesión con email y contraseña en Firebase Authentication y guarda el ID token en la variable token. firebaseApiKey es la Web API Key del proyecto (Firebase Console > Configuración del proyecto)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login correcto', () => pm.response.to.have.status(200));",
+              "const cuerpo = pm.response.json();",
+              "if (cuerpo.idToken) {",
+              "    pm.collectionVariables.set('token', cuerpo.idToken);",
+              "    pm.collectionVariables.set('idCafeteria', '');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Mis cafeterías",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/acceso/cafeterias",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "acceso", "cafeterias" ]
+        },
+        "description": "Solo con el token, sin X-Cafeteria-Id. Devuelve las cafeterías del usuario con su rol en cada una (idCafeteria, nombre, rol, activa)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 con la lista de cafeterías', () => pm.response.to.have.status(200));",
+              "const cafeterias = pm.response.json();",
+              "console.log('Mis cafeterías:', cafeterias);",
+              "if (!pm.collectionVariables.get('idCafeteria') && cafeterias.length > 0) {",
+              "    const elegida = cafeterias.find(c => c.rol === 'ADMINISTRADOR') || cafeterias[0];",
+              "    pm.collectionVariables.set('idCafeteria', elegida.idCafeteria);",
+              "    console.log('Cafetería elegida:', elegida.nombre, '(' + elegida.rol + ')');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Yo (rol y permisos)",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/acceso/yo",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "acceso", "yo" ]
+        },
+        "description": "Rol y permisos en la cafetería elegida. El frontend arma el menú con esto."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 con el rol', () => pm.response.to.have.status(200));",
+              "const yo = pm.response.json();",
+              "console.log('Rol:', yo.rol, 'Permisos:', yo.permisos);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Catálogo de venta",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/ingresos/catalogo",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "ingresos", "catalogo" ]
+        },
+        "description": "Productos base disponibles con sus adiciones y precios, y (solo para el administrador) las categorías de ingreso activas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 con el catálogo', () => pm.response.to.have.status(200));",
+              "const catalogo = pm.response.json();",
+              "const conAdiciones = catalogo.productos.find(p => p.adiciones.length > 0) || catalogo.productos[0];",
+              "pm.collectionVariables.set('idProducto', conAdiciones ? conAdiciones.idProducto : '');",
+              "pm.collectionVariables.set('idAdicion', conAdiciones && conAdiciones.adiciones.length > 0 ? conAdiciones.adiciones[0].idProducto : '');",
+              "pm.collectionVariables.set('idCategoriaIngreso', catalogo.categoriasIngreso.length > 0 ? catalogo.categoriasIngreso[0].idCategoria : '');",
+              "console.log('Producto para la venta:', conAdiciones);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Registrar venta",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" },
+          { "key": "Idempotency-Key", "value": "{{$guid}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{{cuerpoVenta}}" },
+        "url": {
+          "raw": "{{baseUrl}}/ingresos",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "ingresos" ]
+        },
+        "description": "Venta con el producto del catálogo (y su primera adición, si tiene). El total lo calcula el servidor con los precios del catálogo. Cajero o administrador."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const item = { idProducto: pm.collectionVariables.get('idProducto'), cantidad: 1 };",
+              "const idAdicion = pm.collectionVariables.get('idAdicion');",
+              "if (idAdicion) { item.adiciones = [{ idProducto: idAdicion, cantidad: 1 }]; }",
+              "pm.collectionVariables.set('cuerpoVenta', JSON.stringify({ items: [item] }, null, 2));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 venta registrada', () => pm.response.to.have.status(201));",
+              "const venta = pm.response.json();",
+              "pm.collectionVariables.set('idVenta', venta.idVenta);",
+              "console.log('Venta', venta.idVenta, 'total', venta.total);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Registrar ingreso libre (solo administrador)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" },
+          { "key": "Idempotency-Key", "value": "{{$guid}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idCategoria\": \"{{idCategoriaIngreso}}\",\n  \"monto\": 150000,\n  \"descripcion\": \"Evento privado de 20 personas\",\n  \"comprobante\": \"FAC-001\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ingresos/libres",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "ingresos", "libres" ]
+        },
+        "description": "Monto + categoría de ingreso. Administrador: 201. Cajero: 403. El monto acepta máximo 10 dígitos enteros y 2 decimales, sin redondear."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 403) {",
+              "    pm.test('403: este rol no registra ingresos libres', () => pm.response.to.have.status(403));",
+              "} else {",
+              "    pm.test('201 ingreso libre registrado', () => pm.response.to.have.status(201));",
+              "    pm.collectionVariables.set('idIngresoLibre', pm.response.json().idIngreso);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Movimientos de hoy con totales",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/movimientos?desde={{hoy}}&hasta={{hoy}}&pagina=0&tamano=20",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "movimientos" ],
+          "query": [
+            { "key": "desde", "value": "{{hoy}}" },
+            { "key": "hasta", "value": "{{hoy}}" },
+            { "key": "pagina", "value": "0" },
+            { "key": "tamano", "value": "20" },
+            { "key": "tipo", "value": "INGRESO", "disabled": true },
+            { "key": "idCategoria", "value": "{{idCategoriaIngreso}}", "disabled": true }
+          ]
+        },
+        "description": "La venta y el ingreso libre aparecen como INGRESO (el libre con su categoría), con los totales de todo el filtro. El administrador ve todo; el cajero solo lo que él registró."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 con los movimientos', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "const ids = r.movimientos.map(m => m.idMovimiento);",
+              "const idVenta = pm.collectionVariables.get('idVenta');",
+              "if (idVenta) { pm.test('La venta aparece', () => pm.expect(ids).to.include(idVenta)); }",
+              "console.log('Totales:', r.totales, 'Movimientos:', r.totalMovimientos);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Respuestas de acceso",
+      "description": "Lo que responde el backend cuando falta algo: 401, 400 y 403, en formato ProblemDetail.",
+      "item": [
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [ { "key": "X-Cafeteria-Id", "value": "{{idCafeteria}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/movimientos",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "movimientos" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [ "pm.test('401', () => pm.response.to.have.status(401));" ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin X-Cafeteria-Id → 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/movimientos",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "movimientos" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [ "pm.test('400', () => pm.response.to.have.status(400));" ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cafetería donde no tengo membresía → 403",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "X-Cafeteria-Id", "value": "{{$guid}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/acceso/yo",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "acceso", "yo" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [ "pm.test('403', () => pm.response.to.have.status(403));" ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "idCafeteria", "value": "" },
+    { "key": "firebaseApiKey", "value": "" },
+    { "key": "email", "value": "" },
+    { "key": "password", "value": "" },
+    { "key": "idProducto", "value": "" },
+    { "key": "idAdicion", "value": "" },
+    { "key": "idCategoriaIngreso", "value": "" },
+    { "key": "cuerpoVenta", "value": "" },
+    { "key": "idVenta", "value": "" },
+    { "key": "idIngresoLibre", "value": "" },
+    { "key": "hoy", "value": "" }
+  ]
+}

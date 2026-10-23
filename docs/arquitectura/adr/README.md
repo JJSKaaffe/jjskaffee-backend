@@ -1,16 +1,16 @@
 # Decisiones de arquitectura (ADR) y spikes
 
-> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel.
+> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel; ADR-0015 y ADR-0016 se escribieron en este repo. Los textos completos están en `doc/adr/` y `doc/spikes/`.
 > Aquí está cada decisión, lo descartado, la evidencia y **lo que implica para el código**. Los análisis de costos y FODA de cada ADR (útiles para la sustentación, no para programar) siguen en el Project.
 
 | ADR | Decisión | Estado |
 |---|---|---|
-| 0001 | Autenticación delegada a **Firebase Authentication**; aislamiento de datos por cafetería es responsabilidad del producto | Aceptado, validado (SPIKE-01, SPIKE-03) |
+| 0001 | Autenticación delegada a **Firebase Authentication**; aislamiento de datos por cafetería es responsabilidad del producto | Aceptado, validado (SPIKE-01, SPIKE-03); el claim `id_cafeteria` lo reemplaza ADR-0016 |
 | 0002 | Todo movimiento financiero se guarda en **una transacción** (todo o nada) | Aceptado |
 | 0003 | Categorías como **entidad propia por cafetería** con tipo (ingreso/egreso/menú); se archivan, no se borran | Aceptado |
 | 0004 | Agregados con **consultas SQL agregadas + índices**, no sumando en código | Aceptado, validado (SPIKE-06) |
 | 0005 | Hosting con reinicio automático y monitoreo; notificaciones con **Firebase Cloud Messaging** | Aceptado, validado (SPIKE-04) |
-| 0006 | **Monolito sin estado** (stateless), escalado horizontal; no microservicios | Aceptado |
+| 0006 | **Monolito sin estado** (stateless), escalado horizontal; no microservicios | Aceptado; organización interna en ADR-0015 |
 | 0007 | Usuario y fecha/hora de cada movimiento los pone **el backend**, nunca el frontend | Aceptado |
 | 0008 | POS con accesos directos, **deshacer**, código de colores y asistente de IA (< 8 s) | Aceptado |
 | 0009 | POS operable con **teclado**, mouse y táctil | Aceptado |
@@ -19,14 +19,16 @@
 | 0012 | **PostgreSQL** (por Row Level Security nativo) | Aceptado |
 | 0013 | Nube: **Google Cloud Platform** (Cloud SQL para PostgreSQL) | Aceptado |
 | 0014 | Secretos en **Google Cloud Secret Manager**, leídos por un componente **Secrets Provider** | Propuesto (pedido por el profesor) |
+| 0015 | **Monolito modular con módulos hexagonales**, verificado con ArchUnit | Aceptado |
+| 0016 | Cafetería elegida con el encabezado **`X-Cafeteria-Id`**; rol por **membresía** (una persona, varias cafeterías) | Aceptado; reemplaza el claim de ADR-0001 y actualiza RF7 |
 
 ---
 
 ## ADR-0001 · Aislar datos y delegar autenticación
-- **Decisión**: Firebase Authentication. El `id_cafeteria` del usuario va como **custom claim** en el token. El filtrado de datos por cafetería lo hace el producto.
+- **Decisión**: Firebase Authentication. El filtrado de datos por cafetería lo hace el producto. *(El custom claim `id_cafeteria` que decía esta decisión lo reemplazó ADR-0016.)*
 - **Descartados**: desarrollo propio (riesgo de seguridad), Auth0 (caro desde volúmenes intermedios), Supabase Auth (menor trayectoria, lock-in con la BD).
 - **Evidencia (SPIKE-01)**: registro 1.181 ms, custom claim 427 ms, token 1 ms. **(SPIKE-03)** aislamiento validado con usuario de app limitado y `FORCE ROW LEVEL SECURITY`.
-- **En el código**: nunca implementar login/contraseñas propias; el backend verifica el token de Firebase (`VerificadorDeToken` → `FirebaseAuthAdapter`) y construye `UsuarioAutenticado` (id, idCafeteria, rol). Revisar si se acerca al límite gratuito (50.000 MAU).
+- **En el código**: nunca implementar login/contraseñas propias; el backend verifica el token de Firebase (`VerificadorDeToken` → `FirebaseAuthAdapter`), que solo devuelve el `uid`. El `UsuarioAutenticado` (id, idCafeteria, rol) se arma con la membresía (ADR-0016). Revisar si se acerca al límite gratuito (50.000 MAU).
 
 ## ADR-0002 · Exactitud de la información financiera
 - **Decisión**: cada registro (en especial ventas compuestas base + adiciones) dentro de una transacción de BD.
@@ -48,7 +50,7 @@
 
 ## ADR-0006 · Arquitectura simple
 - **Decisión**: monolito **sin estado** que escala horizontalmente. Microservicios descartados por complejidad operativa.
-- **En el código**: no guardar sesión en memoria del servidor; usar pool de conexiones. Vigilar la BD compartida como siguiente cuello de botella.
+- **En el código**: no guardar sesión en memoria del servidor; usar pool de conexiones. Vigilar la BD compartida como siguiente cuello de botella. Organización interna: ADR-0015.
 
 ## ADR-0007 · Trazabilidad total
 - **Decisión**: el backend captura automáticamente usuario y fecha/hora de cada movimiento (contra el "robo hormiga").
@@ -80,12 +82,22 @@
 - **Decisión**: Google Cloud Secret Manager para credenciales de PostgreSQL, API key de IA, FCM y API de anuncios. El backend las lee por un único componente **Secrets Provider** con una cuenta de servicio de solo lectura. Descartados: variables de entorno (sin auditoría ni rotación), HashiCorp Vault (operación costosa), AWS Secrets Manager (segunda nube).
 - **En el código**: **ningún secreto en el repositorio**; `.env` en `.gitignore`, solo se versiona `.env.example` sin valores. En C4: contenedor "Vault de secretos" (nivel 2) y componente "Secrets Provider" (nivel 3).
 
+## ADR-0015 · Monolito modular con módulos hexagonales
+- **Decisión**: una sola aplicación Spring Boot dividida en módulos de negocio (`compartido`, `acceso`, `ingresos`, `egresos`, `movimientos`); cada módulo con `dominio`, `servicios` e `infraestructura`. Complementa ADR-0006.
+- **Descartados**: hexagonal única por capas (no separa áreas de negocio), modular sin hexagonal (pierde dominio puro y pruebas sin BD), microservicios (ADR-0006).
+- **En el código**: `ArquitecturaTest` verifica las capas dentro de cada módulo, que un módulo solo use de otro su `servicios.input..`, que `compartido` no dependa de ningún módulo y que no haya ciclos entre módulos ni entre paquetes. Si una regla falla, se corrige el cambio, no la regla.
+
+## ADR-0016 · Cafetería por encabezado y rol por membresía
+- **Decisión**: el token solo identifica a la persona (`uid`). Cada petición lleva `X-Cafeteria-Id`; el backend lee la membresía (tabla `usuarios`, una fila por persona y cafetería) con RLS de esa cafetería y toma el rol de ahí.
+- **Descartados**: claim `id_cafeteria` (una cafetería por token, cambios esperan a que el token venza), claim con lista de cafeterías (mismos retrasos, límite de 1.000 bytes), sesión en el servidor (rompe ADR-0006).
+- **En el código**: 401 sin token válido, 400 sin `X-Cafeteria-Id` o si no es UUID, 403 sin membresía activa. `GET /acceso/cafeterias` usa `app.current_uid` (`UnidadDeTrabajo.ejecutarConIdentidad`); nunca quedan fijadas a la vez `app.current_cafeteria` y `app.current_uid`. Permisos por rol en `Rol.permisos()`. Migración `db/07_multicafeteria.sql`.
+
 ---
 
 ## Spikes
 | Spike | Tema | Resultado |
 |---|---|---|
-| SPIKE-01 | Proveedor de autenticación | ✅ Firebase Auth con custom claims para `id_cafeteria` |
+| SPIKE-01 | Proveedor de autenticación | ✅ Firebase Auth (el custom claim `id_cafeteria` ya no se usa: ADR-0016) |
 | SPIKE-02 | Tiempo de respuesta de proveedores de IA | ⚠️ Código listo; sin medición real por cuentas sin crédito/API key inválida. Pendiente |
 | SPIKE-03 | Aislamiento multi-tenant | ✅ RLS forzado + usuario de app limitado |
 | SPIKE-04 | Notificaciones en tiempo real | ✅ FCM, 751 ms end-to-end |

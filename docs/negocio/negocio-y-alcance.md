@@ -13,14 +13,14 @@ JJSKaffee es una desarrolladora de nicho para pequeños emprendedores. El produc
 - Motor de alertas basado en tendencias financieras (Treinta solo alerta inventario).
 - IA que explica en lenguaje natural qué pasa y qué hacer.
 
-**Roles**: Administrador (dueño) y Cajero. No hay otros perfiles ni niveles entre administradores en esta versión.
+**Roles**: Administrador (dueño) y Cajero. No hay otros perfiles ni niveles entre administradores en esta versión. El rol es **por cafetería**: una persona puede ser administradora en una cafetería y cajera en otra (ADR-0016).
 
 **Modelo de negocio**: plan básico gratis con anuncios; funciones premium (p. ej. IA, contabilidad específica) por créditos o suscripción. El cobro de la suscripción se gestiona por fuera del sistema (sin pasarela).
 
 ## Decisiones vigentes (las más recientes ganan)
 | Tema | Decisión vigente | Antes se dijo |
 |---|---|---|
-| Tenencia | **Multi-tenant**: una base de datos compartida por varias cafeterías, aislada por `id_cafeteria` + RLS | Una BD por cafetería; "un único establecimiento" |
+| Tenencia | **Multi-tenant**: una base de datos compartida por varias cafeterías, aislada por `id_cafeteria` + RLS. Una persona puede pertenecer a **varias cafeterías**, con un rol en cada una; elige la cafetería con el encabezado `X-Cafeteria-Id` (ADR-0016) | Una BD por cafetería; "un único establecimiento"; una cafetería por usuario con el claim `id_cafeteria` |
 | IA | **Sí hay IA** para recomendaciones y explicación de alertas; las alertas se calculan con reglas configurables y la IA explica | "No se implementarán modelos de IA" |
 | Nómina | **Sí**, básica (salario × período), sin prestaciones ni seguridad social | "No contempla nómina" |
 | Inventario | **Sí** se incluye (cantidad, nombre, precio, distribuidora / stock mínimo) | "En veremos" |
@@ -28,7 +28,8 @@ JJSKaffee es una desarrolladora de nicho para pequeños emprendedores. El produc
 | Alertas | Notificación en 5–10 s tras el evento (FCM) | — |
 | Pagos | **Sin pasarela de pagos**; ingresos y egresos se registran manualmente | — |
 | Reportes | Diarios, semanales, mensuales y anuales, con comparación configurable y recomendaciones | Solo semanal/mensual/anual |
-| Arquitectura | Monolito sin estado desplegado en GCP; el backend de ingresos/egresos con **arquitectura hexagonal** (el profesor dijo que el monolito modular era muy complicado) | MVC / monolito modular |
+| Arquitectura | Monolito sin estado desplegado en GCP, organizado como **monolito modular con módulos hexagonales** (`compartido`, `acceso`, `ingresos`, `egresos`, `movimientos`), verificado con ArchUnit (ADR-0015) | MVC; hexagonal única por capas (el profesor dijo que el monolito modular era muy complicado) |
+| Ingresos | Un ingreso es una **venta** (productos del menú; el total lo calcula el servidor) o un **ingreso libre** (monto + categoría de ingreso), que solo registra el administrador | "Todo ingreso es una venta" |
 | Repos | Dos repos separados (frontend y backend) en la organización GitHub **JJSKaaffe** | Monorepo "JJSkafee" |
 | Frontend | **Vue 3** | — |
 | Building blocks | Internos: Egresos, Ingresos, Inventario, Nómina. Externos vía API: Seguridad, Gestión de usuarios, Alertas, IA | — |
@@ -41,7 +42,7 @@ Objetivo: que las cafeterías administren ingresos y egresos de forma eficiente 
 Detalle completo en `vision-y-mapa-de-impacto.md`.
 
 ## Fuera de alcance (MVP)
-Facturación electrónica DIAN, multi-sucursal, pasarelas de pago, datáfonos, e-commerce/domicilios, ERP completo, contabilidad con validez legal (NIIF). El sistema es de **control interno**: no usar términos como "estados financieros oficiales" y mostrar avisos de que no reemplaza al contador ni exime de facturar.
+Facturación electrónica DIAN, multi-sucursal (que una persona pertenezca a varias cafeterías no lo es: cada cafetería sigue aislada y no hay reportes consolidados), pasarelas de pago, datáfonos, e-commerce/domicilios, ERP completo, contabilidad con validez legal (NIIF). El sistema es de **control interno**: no usar términos como "estados financieros oficiales" y mostrar avisos de que no reemplaza al contador ni exime de facturar.
 
 ## Retos identificados
 Técnicos: diseño de BD transaccional con trazabilidad; reportes agregados exactos y consistentes; seguridad y roles; validación de datos financieros (sin montos negativos ni duplicados); rendimiento con volumen creciente; integridad sin pérdida de datos; interfaz intuitiva.

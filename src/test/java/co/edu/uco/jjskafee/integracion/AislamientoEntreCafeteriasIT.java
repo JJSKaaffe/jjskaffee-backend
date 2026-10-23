@@ -1,22 +1,22 @@
 package co.edu.uco.jjskafee.integracion;
 
-import co.edu.uco.jjskafee.dominio.Egreso;
-import co.edu.uco.jjskafee.dominio.UsuarioAutenticado;
-import co.edu.uco.jjskafee.dominio.excepciones.RecursoNoEncontradoException;
-import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgUsuarioRepository;
-import co.edu.uco.jjskafee.servicios.input.dto.request.EgresoRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.request.FiltroMovimientosRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.request.IngresoRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.request.ItemRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.response.IngresoResponse;
-import co.edu.uco.jjskafee.servicios.input.dto.response.MovimientosResponse;
-import co.edu.uco.jjskafee.servicios.input.ports.ConsultarMovimientosUseCase;
-import co.edu.uco.jjskafee.servicios.input.ports.RegistrarEgresoUseCase;
-import co.edu.uco.jjskafee.servicios.input.ports.RegistrarIngresoUseCase;
-import co.edu.uco.jjskafee.servicios.output.ports.CatalogoRepository;
-import co.edu.uco.jjskafee.servicios.output.ports.EgresoRepository;
-import co.edu.uco.jjskafee.servicios.output.ports.UnidadDeTrabajo;
-import co.edu.uco.jjskafee.servicios.output.ports.VentaRepository;
+import co.edu.uco.jjskafee.acceso.infraestructura.output.repositorios.estructurados.PgUsuarioRepository;
+import co.edu.uco.jjskafee.compartido.dominio.UsuarioAutenticado;
+import co.edu.uco.jjskafee.compartido.dominio.excepciones.RecursoNoEncontradoException;
+import co.edu.uco.jjskafee.compartido.servicios.output.ports.CatalogoRepository;
+import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
+import co.edu.uco.jjskafee.egresos.dominio.Egreso;
+import co.edu.uco.jjskafee.egresos.servicios.input.dto.request.EgresoRequest;
+import co.edu.uco.jjskafee.egresos.servicios.input.ports.RegistrarEgresoUseCase;
+import co.edu.uco.jjskafee.egresos.servicios.output.ports.EgresoRepository;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.request.IngresoRequest;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.request.ItemRequest;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.response.IngresoResponse;
+import co.edu.uco.jjskafee.ingresos.servicios.input.ports.RegistrarIngresoUseCase;
+import co.edu.uco.jjskafee.ingresos.servicios.output.ports.VentaRepository;
+import co.edu.uco.jjskafee.movimientos.servicios.input.dto.request.FiltroMovimientosRequest;
+import co.edu.uco.jjskafee.movimientos.servicios.input.dto.response.MovimientosResponse;
+import co.edu.uco.jjskafee.movimientos.servicios.input.ports.ConsultarMovimientosUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
@@ -139,9 +139,12 @@ class AislamientoEntreCafeteriasIT {
     void unUsuarioSoloSeEncuentraDentroDeSuCafeteria() {
         PgUsuarioRepository usuarios = new PgUsuarioRepository(jdbc);
 
+        assertEquals(CAJERO, unidadDeTrabajo.ejecutar(CAFETERIA, () -> usuarios.buscarActivoPorFirebaseUid(UID_CAJERO)).orElseThrow());
+        // Elegir la cafetería B no sirve para alguien que solo pertenece a A
+        assertTrue(unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_CAJERO)).isEmpty());
+        // Quien pertenece a las dos tiene en cada una su propia membresía y su propio rol (db/08)
         assertEquals(ADMIN, unidadDeTrabajo.ejecutar(CAFETERIA, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).orElseThrow());
-        // Un token que diga ser de la cafetería B no sirve para un usuario de A
-        assertTrue(unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).isEmpty());
+        assertEquals(LAURA_EN_B, unidadDeTrabajo.ejecutar(CAFETERIA_B, () -> usuarios.buscarActivoPorFirebaseUid(UID_ADMIN)).orElseThrow());
     }
 
     // ----- La configuración de la BD que hace posible lo anterior -----

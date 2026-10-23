@@ -13,3 +13,5 @@
 **Conclusión:** Firebase Authentication soporta el modelo multi-tenant mediante custom claims, sin necesitar tablas adicionales para asociar un usuario a su cafetería. El flujo completo (crear → asignar → generar token → eliminar) se ejecutó sin errores.
 
 **Decisión final:** Firebase Authentication confirmado como proveedor de autenticación.
+
+**Actualización (ADR-0016):** el custom claim `id_cafeteria` ya no se usa, porque una persona puede pertenecer a varias cafeterías. La asociación usuario–cafetería vive en la tabla `usuarios` (membresías) y la cafetería se elige con el encabezado `X-Cafeteria-Id`.
