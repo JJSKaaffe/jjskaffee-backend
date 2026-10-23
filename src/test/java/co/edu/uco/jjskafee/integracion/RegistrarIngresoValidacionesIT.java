@@ -1,14 +1,14 @@
 package co.edu.uco.jjskafee.integracion;
 
-import co.edu.uco.jjskafee.dominio.Venta;
-import co.edu.uco.jjskafee.dominio.excepciones.ReglaNegocioException;
-import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgCafeteriaRepository;
-import co.edu.uco.jjskafee.servicios.input.dto.request.IngresoRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.request.ItemRequest;
-import co.edu.uco.jjskafee.servicios.input.dto.response.IngresoResponse;
-import co.edu.uco.jjskafee.servicios.input.ports.RegistrarIngresoUseCase;
-import co.edu.uco.jjskafee.servicios.output.ports.UnidadDeTrabajo;
-import co.edu.uco.jjskafee.servicios.output.ports.VentaRepository;
+import co.edu.uco.jjskafee.compartido.dominio.excepciones.ReglaNegocioException;
+import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
+import co.edu.uco.jjskafee.ingresos.dominio.Venta;
+import co.edu.uco.jjskafee.ingresos.infraestructura.output.repositorios.estructurados.PgCafeteriaRepository;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.request.IngresoRequest;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.request.ItemRequest;
+import co.edu.uco.jjskafee.ingresos.servicios.input.dto.response.IngresoResponse;
+import co.edu.uco.jjskafee.ingresos.servicios.input.ports.RegistrarIngresoUseCase;
+import co.edu.uco.jjskafee.ingresos.servicios.output.ports.VentaRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;

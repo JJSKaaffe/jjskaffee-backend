@@ -1,13 +1,13 @@
 package co.edu.uco.jjskafee.integracion;
 
-import co.edu.uco.jjskafee.dominio.Egreso;
-import co.edu.uco.jjskafee.dominio.Producto;
-import co.edu.uco.jjskafee.dominio.Venta;
-import co.edu.uco.jjskafee.dominio.enums.TipoProducto;
-import co.edu.uco.jjskafee.infraestructura.output.repositorios.estructurados.PgUnidadDeTrabajo;
-import co.edu.uco.jjskafee.servicios.output.ports.EgresoRepository;
-import co.edu.uco.jjskafee.servicios.output.ports.UnidadDeTrabajo;
-import co.edu.uco.jjskafee.servicios.output.ports.VentaRepository;
+import co.edu.uco.jjskafee.compartido.dominio.Producto;
+import co.edu.uco.jjskafee.compartido.dominio.enums.TipoProducto;
+import co.edu.uco.jjskafee.compartido.infraestructura.output.repositorios.estructurados.PgUnidadDeTrabajo;
+import co.edu.uco.jjskafee.compartido.servicios.output.ports.UnidadDeTrabajo;
+import co.edu.uco.jjskafee.egresos.dominio.Egreso;
+import co.edu.uco.jjskafee.egresos.servicios.output.ports.EgresoRepository;
+import co.edu.uco.jjskafee.ingresos.dominio.Venta;
+import co.edu.uco.jjskafee.ingresos.servicios.output.ports.VentaRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;

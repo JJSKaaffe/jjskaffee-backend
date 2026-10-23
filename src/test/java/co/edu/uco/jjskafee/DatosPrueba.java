@@ -1,11 +1,11 @@
 package co.edu.uco.jjskafee;
 
-import co.edu.uco.jjskafee.dominio.Categoria;
-import co.edu.uco.jjskafee.dominio.Producto;
-import co.edu.uco.jjskafee.dominio.UsuarioAutenticado;
-import co.edu.uco.jjskafee.dominio.enums.Rol;
-import co.edu.uco.jjskafee.dominio.enums.TipoCategoria;
-import co.edu.uco.jjskafee.dominio.enums.TipoProducto;
+import co.edu.uco.jjskafee.compartido.dominio.Categoria;
+import co.edu.uco.jjskafee.compartido.dominio.Producto;
+import co.edu.uco.jjskafee.compartido.dominio.UsuarioAutenticado;
+import co.edu.uco.jjskafee.compartido.dominio.enums.Rol;
+import co.edu.uco.jjskafee.compartido.dominio.enums.TipoCategoria;
+import co.edu.uco.jjskafee.compartido.dominio.enums.TipoProducto;
 
 import java.math.BigDecimal;
 import java.time.Clock;

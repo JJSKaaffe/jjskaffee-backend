@@ -1,8 +1,8 @@
 package co.edu.uco.jjskafee.integracion;
 
-import co.edu.uco.jjskafee.dominio.UsuarioAutenticado;
-import co.edu.uco.jjskafee.dominio.excepciones.NoAutenticadoException;
-import co.edu.uco.jjskafee.servicios.output.ports.VerificadorDeToken;
+import co.edu.uco.jjskafee.acceso.servicios.output.ports.VerificadorDeToken;
+import co.edu.uco.jjskafee.compartido.dominio.UsuarioAutenticado;
+import co.edu.uco.jjskafee.compartido.dominio.excepciones.NoAutenticadoException;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
