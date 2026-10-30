@@ -145,6 +145,69 @@ class FirebaseAuthFilterTest {
     }
 
     @Test
+    void misCafeteriasTambienSeReconoceConElContextPathApi() throws Exception {
+        // Perfil gcp: server.servlet.context-path=/api (ADR-0017)
+        MockHttpServletRequest peticion = peticion("GET", "/api/acceso/cafeterias", "valido", null);
+        peticion.setContextPath("/api");
+        MockFilterChain cadena = new MockFilterChain();
+
+        assertEquals(200, ejecutar(peticion, cadena).getStatus());
+        assertEquals(new Identidad("uid-valido"), peticion.getAttribute(AtributosDePeticion.IDENTIDAD));
+        assertNotNull(cadena.getRequest());
+    }
+
+    @Test
+    void conElContextPathApiLasDemasRutasSiguenPidiendoLaCafeteria() throws Exception {
+        MockHttpServletRequest peticion = peticion("GET", "/api/movimientos", "valido", null);
+        peticion.setContextPath("/api");
+
+        assertEquals(400, ejecutar(peticion, new MockFilterChain()).getStatus());
+    }
+
+    // ----- Token detrás del API Gateway (ADR-0017) -----
+
+    @Test
+    void sinXForwardedAuthorizationTomaElTokenDeAuthorization() throws Exception {
+        MockHttpServletRequest peticion = peticion("GET", "/movimientos", "valido", CAFETERIA);
+        MockFilterChain cadena = new MockFilterChain();
+
+        assertEquals(200, ejecutar(peticion, cadena).getStatus());
+        assertSame(ADMIN, peticion.getAttribute(AtributosDePeticion.USUARIO));
+    }
+
+    @Test
+    void conXForwardedAuthorizationTomaElTokenDeAhi() throws Exception {
+        MockHttpServletRequest peticion = peticion("GET", "/movimientos", null, CAFETERIA);
+        peticion.addHeader("X-Forwarded-Authorization", "Bearer valido");
+        MockFilterChain cadena = new MockFilterChain();
+
+        assertEquals(200, ejecutar(peticion, cadena).getStatus());
+        assertSame(ADMIN, peticion.getAttribute(AtributosDePeticion.USUARIO));
+        assertNotNull(cadena.getRequest());
+    }
+
+    @Test
+    void siVienenAmbosGanaXForwardedAuthorization() throws Exception {
+        // Authorization trae el token de la cuenta de servicio del gateway, que no es de Firebase
+        MockHttpServletRequest peticion = peticion("GET", "/movimientos", "token-del-gateway", CAFETERIA);
+        peticion.addHeader("X-Forwarded-Authorization", "Bearer valido");
+        MockFilterChain cadena = new MockFilterChain();
+
+        assertEquals(200, ejecutar(peticion, cadena).getStatus());
+        assertSame(ADMIN, peticion.getAttribute(AtributosDePeticion.USUARIO));
+    }
+
+    @Test
+    void siVienenAmbosNoSeUsaAuthorizationAunqueSeaValido() throws Exception {
+        MockHttpServletRequest peticion = peticion("GET", "/movimientos", "valido", CAFETERIA);
+        peticion.addHeader("X-Forwarded-Authorization", "Bearer inventado");
+        MockFilterChain cadena = new MockFilterChain();
+
+        assertEquals(401, ejecutar(peticion, cadena).getStatus());
+        assertNull(cadena.getRequest());
+    }
+
+    @Test
     void misCafeteriasSinTokenResponde401() throws Exception {
         assertEquals(401, ejecutar(peticion("GET", "/acceso/cafeterias", null, null), new MockFilterChain()).getStatus());
     }

@@ -1,6 +1,6 @@
 # Decisiones de arquitectura (ADR) y spikes
 
-> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel; ADR-0015 y ADR-0016 se escribieron en este repo. Los textos completos están en `doc/adr/` y `doc/spikes/`.
+> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel; ADR-0015 y ADR-0016 se escribieron en este repo; ADR-0017 se copió del repo de documentación (`jjskaffee-docs/adr/adr-0017.md`). Los textos completos están en `doc/adr/` y `doc/spikes/`.
 > Aquí está cada decisión, lo descartado, la evidencia y **lo que implica para el código**. Los análisis de costos y FODA de cada ADR (útiles para la sustentación, no para programar) siguen en el Project.
 
 | ADR | Decisión | Estado |
@@ -21,6 +21,7 @@
 | 0014 | Secretos en **Google Cloud Secret Manager**, leídos por un componente **Secrets Provider** | Propuesto (pedido por el profesor) |
 | 0015 | **Monolito modular con módulos hexagonales**, verificado con ArchUnit | Aceptado |
 | 0016 | Cafetería elegida con el encabezado **`X-Cafeteria-Id`**; rol por **membresía** (una persona, varias cafeterías) | Aceptado; reemplaza el claim de ADR-0001 y actualiza RF7 |
+| 0017 | **Google Cloud API Gateway** como única entrada pública; Cloud Run privado | Aceptado; archivo y código listos, pendiente de montar en la nube |
 
 ---
 
@@ -91,6 +92,11 @@
 - **Decisión**: el token solo identifica a la persona (`uid`). Cada petición lleva `X-Cafeteria-Id`; el backend lee la membresía (tabla `usuarios`, una fila por persona y cafetería) con RLS de esa cafetería y toma el rol de ahí.
 - **Descartados**: claim `id_cafeteria` (una cafetería por token, cambios esperan a que el token venza), claim con lista de cafeterías (mismos retrasos, límite de 1.000 bytes), sesión en el servidor (rompe ADR-0006).
 - **En el código**: 401 sin token válido, 400 sin `X-Cafeteria-Id` o si no es UUID, 403 sin membresía activa. `GET /acceso/cafeterias` usa `app.current_uid` (`UnidadDeTrabajo.ejecutarConIdentidad`); nunca quedan fijadas a la vez `app.current_cafeteria` y `app.current_uid`. Permisos por rol en `Rol.permisos()`. Migración `db/07_multicafeteria.sql`.
+
+## ADR-0017 · API Gateway delante de Cloud Run
+- **Decisión**: Google Cloud API Gateway como única URL pública. Valida el token de Firebase (emisor `https://securetoken.google.com/jjskafee`, audiencia `jjskafee`) y es el único que puede invocar el backend (Cloud Run privado, `roles/run.invoker` solo para su cuenta de servicio). Complementa ADR-0001, ADR-0013 y ADR-0014.
+- **Descartados**: Spring Cloud Gateway (otro servicio para programar y operar), Cloud Run directo (backend expuesto), reescrituras de Firebase Hosting (no validan tokens ni dejan Cloud Run privado).
+- **En el código**: `infra/api-gateway/openapi.yaml` (OpenAPI 2.0) con una ruta por endpoint bajo `/api`, agrupadas con `tags` por módulo, `x-google-backend` con `APPEND_PATH_TO_ADDRESS` y `OPTIONS` sin seguridad para el preflight de CORS. `FirebaseAuthFilter` toma el token de `X-Forwarded-Authorization` si viene (el gateway pone el suyo en `Authorization`) y si no de `Authorization`; el backend sigue verificando token y membresía. Perfil `gcp` con `server.servlet.context-path=/api`; en local sin prefijo. `ContratoApiGatewayTest` verifica que el yaml y los controllers coincidan. Despliegue: `docs/despliegue/api-gateway.md`.
 
 ---
 

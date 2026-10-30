@@ -10,9 +10,10 @@ API REST del sistema de gestión financiera **multi-tenant** para cafeterías pe
 | --- | --- |
 | [`docs/`](docs/README.md) | Negocio y alcance, requisitos, calidad, restricciones y arquitectura del backend ([`backend-hexagonal.md`](docs/arquitectura/backend-hexagonal.md)) |
 | [`doc/drivers`](doc/drivers/drivers.md) | Drivers arquitectónicos: funcionalidades significativas, restricciones y escenarios de calidad |
-| [`doc/adr`](doc/adr) | Registros de decisiones de arquitectura (ADR-0001 a ADR-0016) |
+| [`doc/adr`](doc/adr) | Registros de decisiones de arquitectura (ADR-0001 a ADR-0017) |
 | [`doc/spikes`](doc/spikes) | Spikes técnicos que validan las decisiones (SPIKE-01 a SPIKE-06) |
 | [`docs/postman`](docs/postman) | Colección de Postman con el flujo de registrar ingreso |
+| [`infra/api-gateway`](infra/api-gateway/openapi.yaml) | Configuración del API Gateway (OpenAPI 2.0); despliegue en [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md) |
 
 ## Arquitectura
 
@@ -27,6 +28,8 @@ API REST del sistema de gestión financiera **multi-tenant** para cafeterías pe
 | `movimientos` | Consulta de ingresos y egresos con filtros y totales |
 
 `ArquitecturaTest` (ArchUnit) verifica en cada build las capas de cada módulo, que un módulo solo use los puertos de entrada de otro y que no haya ciclos.
+
+**Entrada pública** (ADR-0017): Google Cloud API Gateway valida el token de Firebase y es el único que puede invocar Cloud Run, que queda privado. Las rutas del gateway son las del backend con el prefijo `/api` ([`infra/api-gateway/openapi.yaml`](infra/api-gateway/openapi.yaml)); `ContratoApiGatewayTest` verifica que coincidan con los controllers. Detrás del gateway el token del usuario llega en `X-Forwarded-Authorization` y el backend lo vuelve a verificar.
 
 ## Flujo principal: registrar un ingreso
 
@@ -58,6 +61,7 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
 | [ADR-0014](doc/adr/adr-0014.md) | Secretos centralizados en **Google Cloud Secret Manager** | — |
 | [ADR-0015](doc/adr/adr-0015.md) | **Monolito modular con módulos hexagonales**, verificado con ArchUnit | — |
 | [ADR-0016](doc/adr/adr-0016.md) | Cafetería elegida con **`X-Cafeteria-Id`** y rol por **membresía** (una persona, varias cafeterías) | — |
+| [ADR-0017](doc/adr/adr-0017.md) | **Google Cloud API Gateway** como única entrada pública; Cloud Run privado | — |
 
 ## Reglas no negociables
 
@@ -75,7 +79,7 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
 - Base de datos: PostgreSQL 17 con Row Level Security (Cloud SQL, GCP)
 - Autenticación: Firebase Authentication
 - Notificaciones: Firebase Cloud Messaging
-- Nube: Google Cloud Platform (Cloud Run) · Secretos: Google Cloud Secret Manager
+- Nube: Google Cloud Platform (API Gateway + Cloud Run) · Secretos: Google Cloud Secret Manager
 - CI: GitHub Actions con pruebas, ArchUnit y Trivy
 
 ## Cómo correrlo
@@ -85,7 +89,8 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
 3. Comandos (en Windows usa `.\mvnw.cmd`):
    - `./mvnw test`: pruebas unitarias y `ArquitecturaTest`, sin base de datos.
    - `./mvnw verify`: además, las pruebas de integración `*IT` contra PostgreSQL.
-   - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`: levanta la API en `http://localhost:8080` (sin el prefijo `/api`, que lo agrega el API Gateway).
+   - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`: levanta la API en `http://localhost:8080` (sin el prefijo `/api`; en la nube el perfil `gcp` atiende bajo `/api` detrás del API Gateway).
+4. En la nube: [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md).
 
 ## Equipo
 

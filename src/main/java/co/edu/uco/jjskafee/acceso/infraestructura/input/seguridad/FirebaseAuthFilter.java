@@ -27,12 +27,19 @@ import java.util.UUID;
  * en todas las peticiones (ADR-0016), y deja en la petición el UsuarioAutenticado con el rol de esa
  * cafetería. GET /acceso/cafeterias solo pide el token: deja la Identidad para listar las cafeterías.
  * Sin token válido → 401; falta el encabezado o no es UUID → 400; sin membresía activa → 403.
+ * Detrás del API Gateway el token de Firebase llega en X-Forwarded-Authorization (ADR-0017).
  */
 @Component
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
     /** Única ruta que no lleva cafetería: el usuario todavía no ha elegido una. */
     static final String RUTA_MIS_CAFETERIAS = "/acceso/cafeterias";
+
+    /**
+     * El API Gateway llama a Cloud Run con el token de su cuenta de servicio en Authorization y copia aquí
+     * el token original del usuario (ADR-0017). Si viene, gana sobre Authorization.
+     */
+    static final String AUTORIZACION_REENVIADA = "X-Forwarded-Authorization";
 
     private static final String PREFIJO = "Bearer ";
 
@@ -93,7 +100,11 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
     }
 
     private static String token(HttpServletRequest request) {
-        String encabezado = request.getHeader(HttpHeaders.AUTHORIZATION);
+        // En la nube viene del gateway; en local solo hay Authorization
+        String encabezado = request.getHeader(AUTORIZACION_REENVIADA);
+        if (encabezado == null || encabezado.isBlank()) {
+            encabezado = request.getHeader(HttpHeaders.AUTHORIZATION);
+        }
         if (encabezado == null || !encabezado.regionMatches(true, 0, PREFIJO, 0, PREFIJO.length())) {
             throw new NoAutenticadoException("Falta el token de inicio de sesión");
         }

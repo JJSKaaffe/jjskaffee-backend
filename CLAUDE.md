@@ -10,11 +10,12 @@ Responde y escribe comentarios, mensajes de commit y nombres de dominio **en esp
 - Autenticación: **Firebase Authentication**. El token solo identifica a la persona (`uid`); **no** lleva la cafetería. Nunca implementar login ni guardar contraseñas propias.
 - Selección de cafetería: encabezado **`X-Cafeteria-Id`** en cada petición; el backend comprueba la membresía en la tabla `usuarios` y toma el rol de esa cafetería (ADR-0016).
 - Secretos: **Google Cloud Secret Manager** vía un componente `SecretsProvider`. Ningún secreto en el repo; solo `.env.example` sin valores.
-- Notificaciones: Firebase Cloud Messaging. Entrada pública por un **API Gateway** (`/api/...`).
-- CI en GitHub: **Trivy** y **ArchUnit**. Si Trivy reporta CVEs, se fijan versiones en `<properties>` del `pom.xml` (ya hay overrides de Tomcat y Jackson).
+- Notificaciones: Firebase Cloud Messaging. Entrada pública por **Google Cloud API Gateway** (`/api/...`, ADR-0017): valida el token de Firebase y es el único que invoca Cloud Run (privado). Detrás del gateway el token del usuario llega en `X-Forwarded-Authorization`.
+- CI en GitHub: **Trivy** y **ArchUnit**. Si Trivy reporta CVEs, se fijan versiones en `<properties>` del `pom.xml` (ya hay overrides de Tomcat, Jackson y Guava).
 
 ## Comandos
-- `./mvnw test` (en Windows `.\mvnw.cmd test`): pruebas unitarias + `ArquitecturaTest`, sin base de datos. Correrlas siempre después de cambiar código.
+- `./mvnw test` (en Windows `.\mvnw.cmd test`): pruebas unitarias + `ArquitecturaTest` + `ContratoApiGatewayTest`, sin base de datos. Correrlas siempre después de cambiar código.
+- `npx --yes @apidevtools/swagger-cli validate infra/api-gateway/openapi.yaml`: valida el archivo del API Gateway.
 - `./mvnw verify`: además corre las pruebas `*IT` contra PostgreSQL (necesitan la base creada con todos los scripts de `db/` y `.env` o las variables `JJSKAFFEE_DB_*`).
 - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`: levantar la API en local (lee `.env`; ver `.env.example`).
 - `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed .`: el mismo escaneo del CI (Trivy 0.75.0).
@@ -60,7 +61,7 @@ Entre módulos:
 
 `ArquitecturaTest` verifica todo lo anterior. Si un cambio rompe `ArquitecturaTest`, el cambio está mal, no la prueba; nunca se debilita una regla para que pase.
 
-**Estado**: en la rama `feature/monolito-modular-ingresos` el código ya está organizado en los módulos de arriba (ADR-0015), con multi-cafetería por encabezado y membresías (ADR-0016), ingresos libres, catálogo de venta y el flujo completo de registrar ingreso probado por HTTP (`FlujoRegistrarIngresoIT`). `main` todavía tiene la versión por capas hasta que Joel haga el merge. Colección de Postman del flujo en `docs/postman/`. Pendiente: perfil `gcp` (Cloud Run + Cloud SQL) y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno. Anular ingresos libres (hay columnas `anulado`/`motivo_anulacion`, sin caso de uso ni `GRANT UPDATE` todavía).
+**Estado**: en la rama `feature/monolito-modular-ingresos` el código ya está organizado en los módulos de arriba (ADR-0015), con multi-cafetería por encabezado y membresías (ADR-0016), ingresos libres, catálogo de venta y el flujo completo de registrar ingreso probado por HTTP (`FlujoRegistrarIngresoIT`). `main` todavía tiene la versión por capas hasta que Joel haga el merge. Colección de Postman del flujo en `docs/postman/`. En la rama `feature/preparar-nube` está el API Gateway (ADR-0017): `infra/api-gateway/openapi.yaml` (OpenAPI 2.0, una ruta por endpoint bajo `/api` con su `OPTIONS` sin seguridad), `FirebaseAuthFilter` que prefiere `X-Forwarded-Authorization`, perfil `gcp` con `server.servlet.context-path=/api` y `jjskaffee.cors.origenes=${JJSKAFFEE_CORS_ORIGENES}`, `ContratoApiGatewayTest` (yaml ↔ controllers) y el paso a paso en `docs/despliegue/api-gateway.md`; falta montarlo en la nube. **Todo endpoint nuevo se agrega también a `openapi.yaml`** (si no, `ContratoApiGatewayTest` falla). Pendiente: en el perfil `gcp`, Cloud SQL y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno. Anular ingresos libres (hay columnas `anulado`/`motivo_anulacion`, sin caso de uso ni `GRANT UPDATE` todavía).
 
 Detalle de capas, adaptadores pendientes y recorrido de una petición:
 @docs/arquitectura/backend-hexagonal.md
@@ -107,6 +108,7 @@ Ver `docs/negocio/negocio-y-alcance.md`. Si encuentras otra contradicción que n
 Índice completo en `docs/README.md`:
 - `docs/negocio/negocio-y-alcance.md`: producto, diferenciales, decisiones vigentes, fuera de alcance.
 - `docs/requisitos/requisitos-funcionales.md`: RF1–RF63 (★ = módulo ingresos/egresos).
-- `docs/arquitectura/adr/README.md`: ADR-0001…0016 y spikes, con implicaciones para el código.
+- `docs/arquitectura/adr/README.md`: ADR-0001…0017 y spikes, con implicaciones para el código.
+- `docs/despliegue/api-gateway.md`: montar el API Gateway delante de Cloud Run privado.
 - `docs/calidad/atributos-y-escenarios.md`: prioridades, escenarios y tácticas.
 - `docs/restricciones/`: restricciones de negocio (legales: Ley 1581, DIAN, NIIF, laboral) y técnicas.

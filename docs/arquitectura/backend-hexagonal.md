@@ -1,6 +1,6 @@
 # Backend · monolito modular con módulos hexagonales
 
-> Fuentes: diagrama "Hexagonal ingresos y egresos.png" (copia en `img/hexagonal-ingresos-egresos.png`), el código de este repo y `ArquitecturaTest.java`. Decisiones: ADR-0015 (monolito modular) y ADR-0016 (cafetería por encabezado y membresías), en `doc/adr/`.
+> Fuentes: diagrama "Hexagonal ingresos y egresos.png" (copia en `img/hexagonal-ingresos-egresos.png`), el código de este repo y `ArquitecturaTest.java`. Decisiones: ADR-0015 (monolito modular), ADR-0016 (cafetería por encabezado y membresías) y ADR-0017 (API Gateway), en `doc/adr/`.
 
 Alcance: RF7 y RF9 (multi-cafetería y aislamiento), RF14 (egresos), RF16–RF18 (consulta y categorías), RF24–RF27 (ventas con adiciones), ingresos libres, RF38 (consulta de movimientos con totales) y RF40 (permisos por rol).
 
@@ -41,7 +41,7 @@ Una sola aplicación Spring Boot (un jar, un servicio en Cloud Run), dividida en
 Si un cambio rompe `ArquitecturaTest`, el cambio está mal, no la prueba.
 
 ## Endpoints
-El API Gateway los expone con el prefijo `/api`. Todos llevan `Authorization: Bearer <token de Firebase>` y `X-Cafeteria-Id: <UUID>`, salvo `GET /acceso/cafeterias`, que solo lleva el token.
+El API Gateway los expone con el prefijo `/api` (ver "API Gateway" más abajo). Todos llevan `Authorization: Bearer <token de Firebase>` y `X-Cafeteria-Id: <UUID>`, salvo `GET /acceso/cafeterias`, que solo lleva el token.
 
 | Método y ruta | Quién | Respuesta |
 |---|---|---|
@@ -54,15 +54,25 @@ El API Gateway los expone con el prefijo `/api`. Todos llevan `Authorization: Be
 | `POST /egresos` | Administrador | 201 `EgresoResponse` |
 | `GET /movimientos?desde&hasta&tipo&idCategoria&pagina&tamano` | Administrador: todo; cajero: solo lo suyo | 200 `MovimientosResponse` (página ≤ 50 y totales de todo el filtro) |
 
-**Acceso (`FirebaseAuthFilter`, ADR-0016)**: verifica el token (`VerificadorDeToken` solo devuelve el `uid`), lee `X-Cafeteria-Id` y busca la membresía activa de ese `uid` en esa cafetería con RLS. Sin token o token inválido → 401; falta el encabezado o no es UUID → 400; sin membresía activa (o la cafetería no existe) → 403. Deja `UsuarioAutenticado` en la petición (`AtributosDePeticion.USUARIO`) con el rol de esa cafetería.
+**Acceso (`FirebaseAuthFilter`, ADR-0016)**: toma el token de `X-Forwarded-Authorization` si viene (detrás del API Gateway) y si no de `Authorization`, lo verifica (`VerificadorDeToken` solo devuelve el `uid`), lee `X-Cafeteria-Id` y busca la membresía activa de ese `uid` en esa cafetería con RLS. Sin token o token inválido → 401; falta el encabezado o no es UUID → 400; sin membresía activa (o la cafetería no existe) → 403. Deja `UsuarioAutenticado` en la petición (`AtributosDePeticion.USUARIO`) con el rol de esa cafetería.
 
 **Errores (`ManejadorDeErrores`)**: ProblemDetail (RFC 9457). 400 datos inválidos (con `errores` por campo), 401, 403 `SinPermisoException`, 404 `RecursoNoEncontradoException`, 422 `ReglaNegocioException`, 500 sin detalles internos.
+
+## API Gateway (ADR-0017)
+Google Cloud API Gateway es la única entrada pública; Cloud Run queda privado (`--no-allow-unauthenticated`, `roles/run.invoker` solo para la cuenta `gateway-invoker`). El gateway no tiene código: es `infra/api-gateway/openapi.yaml` (OpenAPI 2.0).
+- Una ruta por endpoint del backend, con el prefijo `/api`, agrupadas con `tags` por módulo (`acceso`, `ingresos`, `egresos`, `movimientos`); no se renombran ni se combinan.
+- `securityDefinitions.firebase` (emisor `https://securetoken.google.com/jjskafee`, audiencia `jjskafee`) y `security: [firebase]` global; cada ruta tiene su `OPTIONS` con `security: []` para que el preflight de CORS llegue al backend.
+- `x-google-backend` con la URL de Cloud Run (marcador `CLOUD_RUN_URL`), `path_translation: APPEND_PATH_TO_ADDRESS`, `jwt_audience` y `deadline: 15`. La ruta llega completa (`/api/...`), por eso el perfil `gcp` usa `server.servlet.context-path=/api`; en local no hay prefijo.
+- El gateway llama a Cloud Run con el token de su cuenta de servicio en `Authorization` y copia el del usuario a `X-Forwarded-Authorization`; `FirebaseAuthFilter` prefiere ese encabezado. El backend vuelve a verificar el token y la membresía: no se confía solo en el gateway.
+- `X-Cafeteria-Id` e `Idempotency-Key` pasan sin cambios. Permisos por rol y cafetería los revisa el backend.
+- `ContratoApiGatewayTest` (en `./mvnw test`) verifica que cada endpoint de los controllers esté en el yaml con su método y su `OPTIONS`, que toda operación salvo `OPTIONS` exija `firebase` y que el yaml no tenga rutas que el backend no atienda.
+- Despliegue paso a paso: `docs/despliegue/api-gateway.md`. La copia con la URL real (`openapi.desplegado.yaml`) está en `.gitignore`.
 
 ## Adaptadores de salida
 - `PgUnidadDeTrabajo`: abre la transacción y fija `app.current_cafeteria` (para toda operación de negocio) o `app.current_uid` (solo para "mis cafeterías") con `set_config(..., true)`. La misma sentencia que fija una borra la otra: nunca quedan las dos activas.
 - `PgUsuarioRepository` (membresías), `PgVentaRepository` y `PgIngresoLibreRepository` (guardan con `INSERT ... ON CONFLICT (id_cafeteria, clave_idempotencia) DO NOTHING`), `PgEgresoRepository`, `PgCatalogoRepository`, `PgCatalogoDeVentaRepository` (productos y adiciones en una sola consulta), `PgCafeteriaRepository` (lee `cafeteria.activo`), `PgMovimientoRepository` (totales con `SUM ... FILTER` y página con `LIMIT/OFFSET` sobre `v_movimiento`).
 - `FirebaseAuthAdapter`: verifica el token y devuelve el `uid`.
-- Pendiente: `SecretsProvider` (Google Cloud Secret Manager) con el perfil `gcp` (ADR-0014).
+- Pendiente: `SecretsProvider` (Google Cloud Secret Manager) y Cloud SQL en el perfil `gcp` (ADR-0014). Hoy el perfil `gcp` solo pone el prefijo `/api` y los orígenes de CORS (`JJSKAFFEE_CORS_ORIGENES`).
 
 **Base de datos**: PostgreSQL en Cloud SQL con RLS forzado en toda tabla con datos de cafetería. Scripts en `db/` (01–10), en orden: migraciones y seeds de prueba por separado. `usuarios` guarda membresías (UNIQUE `(id_cafeteria, firebase_uid)`); `v_movimiento` une ventas confirmadas, ingresos libres y egresos no anulados, con `security_invoker`.
 
@@ -71,8 +81,8 @@ El API Gateway los expone con el prefijo `/api`. Todos llevan `Authorization: Be
 2. `GET /api/acceso/cafeterias` (solo token): la persona ve sus cafeterías con su rol en cada una y elige una.
 3. `GET /api/acceso/yo` con `X-Cafeteria-Id`: el frontend arma el menú con los permisos.
 4. `GET /api/ingresos/catalogo`: la pantalla de venta muestra productos, adiciones, precios y (al administrador) las categorías de ingreso.
-5. `POST /api/ingresos` (venta) o `POST /api/ingresos/libres` (ingreso libre, solo administrador). El API Gateway enruta al backend.
-6. `FirebaseAuthFilter` arma `UsuarioAutenticado` con el rol de esa cafetería.
+5. `POST /api/ingresos` (venta) o `POST /api/ingresos/libres` (ingreso libre, solo administrador). El API Gateway valida el token de Firebase y enruta a Cloud Run con el token original en `X-Forwarded-Authorization`.
+6. `FirebaseAuthFilter` vuelve a verificar el token y arma `UsuarioAutenticado` con el rol de esa cafetería.
 7. El controller pasa el request, la `Idempotency-Key` y el usuario al puerto de entrada.
 8. El caso de uso, dentro de `UnidadDeTrabajo.ejecutar(idCafeteria, ...)`, valida, crea la entidad y llama al puerto de salida.
 9. El repositorio hace el `INSERT` con JDBC; PostgreSQL lo guarda con RLS de la cafetería.
@@ -134,8 +144,8 @@ Un ingreso es una **venta** de productos del menú (`POST /ingresos`, tabla `ven
 - Patrones: entidades con fábrica (`crear` / `registrar`) que valida y `reconstruir` para el repositorio; IDs `UUID`; dinero en `BigDecimal`; tiempo con `Instant` y `Clock` inyectado.
 
 ## Pruebas
-- Unitarias (`./mvnw test`): dominio (`VentaTest`, `IngresoLibreTest`, `ProductoDelMenuTest`, `EgresoTest`, `FiltroMovimientosTest`, `RolTest`), casos de uso con los fakes de `RepositoriosEnMemoria` (`RegistrarIngresoTest`, `RegistrarIngresoLibreTest`, `ConsultarCatalogoDeVentaTest`, `RegistrarEgresoTest`, `ConsultarMovimientosTest`, `AutenticarUsuarioTest`, `ConsultarAccesoTest`), `FirebaseAuthFilterTest`, `FirebaseAuthAdapterTest` y `ArquitecturaTest`.
+- Unitarias (`./mvnw test`): dominio (`VentaTest`, `IngresoLibreTest`, `ProductoDelMenuTest`, `EgresoTest`, `FiltroMovimientosTest`, `RolTest`), casos de uso con los fakes de `RepositoriosEnMemoria` (`RegistrarIngresoTest`, `RegistrarIngresoLibreTest`, `ConsultarCatalogoDeVentaTest`, `RegistrarEgresoTest`, `ConsultarMovimientosTest`, `AutenticarUsuarioTest`, `ConsultarAccesoTest`), `FirebaseAuthFilterTest` (incluye `X-Forwarded-Authorization` y el context-path `/api`), `FirebaseAuthAdapterTest`, `ArquitecturaTest` y `ContratoApiGatewayTest` (yaml del gateway ↔ controllers).
 - Integración contra PostgreSQL (`./mvnw verify`, paquete `integracion`): `AislamientoEntreCafeteriasIT`, `MultiCafeteriaIT`, `AccesoControllerIT`, `IngresosYEgresosPostgresIT`, `RegistrarIngresoValidacionesIT`, `IngresosLibresIT`, `CatalogoDeVentaIT`, `TransaccionTodoONadaIT`, `MovimientosControllerIT` y `FlujoRegistrarIngresoIT` (el flujo completo por HTTP). Usan un reloj fijo en 2099 y deshacen sus cambios. `ConfiguracionDePrueba` traduce cada token de prueba a un `uid`; la membresía sale de los seeds reales.
 
 ## Calidad en CI
-GitHub Actions (`.github/workflows/seguridad.yml`): crea la base con los scripts `db/01`…`db/10` en orden, corre `./mvnw verify` (unitarias, ArchUnit e integración) y escanea con **Trivy** (el `pom.xml` fuerza `tomcat.version` y `jackson-bom.version` por CVEs reportados).
+GitHub Actions (`.github/workflows/seguridad.yml`): crea la base con los scripts `db/01`…`db/10` en orden, corre `./mvnw verify` (unitarias, ArchUnit, contrato del API Gateway e integración) y escanea con **Trivy** (el `pom.xml` fuerza `tomcat.version`, `jackson-bom.version` y `guava.version` por CVEs reportados; Guava, con una entrada en `dependencyManagement` porque Spring Boot no la maneja).
