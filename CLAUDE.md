@@ -10,7 +10,7 @@ Responde y escribe comentarios, mensajes de commit y nombres de dominio **en esp
 - Autenticación: **Firebase Authentication**. El token solo identifica a la persona (`uid`); **no** lleva la cafetería. Nunca implementar login ni guardar contraseñas propias.
 - Selección de cafetería: encabezado **`X-Cafeteria-Id`** en cada petición; el backend comprueba la membresía en la tabla `usuarios` y toma el rol de esa cafetería (ADR-0016).
 - Secretos: **Google Cloud Secret Manager** vía un componente `SecretsProvider`. Ningún secreto en el repo; solo `.env.example` sin valores.
-- Notificaciones: Firebase Cloud Messaging. Entrada pública por **Google Cloud API Gateway** (`/api/...`, ADR-0017): valida el token de Firebase y es el único que invoca Cloud Run (privado). Detrás del gateway el token del usuario llega en `X-Forwarded-Authorization`.
+- Notificaciones: Firebase Cloud Messaging. Entrada pública: navegador → balanceador HTTPS con **Google Cloud Armor** (WAF, ADR-0018; `https://<ip-con-guiones>.sslip.io/api`, sin dominio propio por ahora) → **Google Cloud API Gateway** (`/api/...`, ADR-0017) → Cloud Run privado → Cloud SQL. El gateway valida el token de Firebase y es el único que invoca Cloud Run. Detrás del gateway el token del usuario llega en `X-Forwarded-Authorization`.
 - CI en GitHub: **Trivy** y **ArchUnit**. Si Trivy reporta CVEs, se fijan versiones en `<properties>` del `pom.xml` (ya hay overrides de Tomcat, Jackson y Guava).
 
 ## Comandos
@@ -61,10 +61,10 @@ Entre módulos:
 
 `ArquitecturaTest` verifica todo lo anterior. Si un cambio rompe `ArquitecturaTest`, el cambio está mal, no la prueba; nunca se debilita una regla para que pase.
 
-**Estado**: en la rama `feature/monolito-modular-ingresos` el código ya está organizado en los módulos de arriba (ADR-0015), con multi-cafetería por encabezado y membresías (ADR-0016), ingresos libres, catálogo de venta y el flujo completo de registrar ingreso probado por HTTP (`FlujoRegistrarIngresoIT`). `main` todavía tiene la versión por capas hasta que Joel haga el merge. Colección de Postman del flujo en `docs/postman/`. En la rama `feature/preparar-nube` está el API Gateway (ADR-0017): `infra/api-gateway/openapi.yaml` (OpenAPI 2.0, una ruta por endpoint bajo `/api` con su `OPTIONS` sin seguridad), `FirebaseAuthFilter` que prefiere `X-Forwarded-Authorization`, perfil `gcp` con `server.servlet.context-path=/api` y `jjskaffee.cors.origenes=${JJSKAFFEE_CORS_ORIGENES}`, `ContratoApiGatewayTest` (yaml ↔ controllers) y el paso a paso en `docs/despliegue/api-gateway.md`; falta montarlo en la nube. **Todo endpoint nuevo se agrega también a `openapi.yaml`** (si no, `ContratoApiGatewayTest` falla). Pendiente: en el perfil `gcp`, Cloud SQL y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno. Anular ingresos libres (hay columnas `anulado`/`motivo_anulacion`, sin caso de uso ni `GRANT UPDATE` todavía).
+**Estado**: en la rama `feature/monolito-modular-ingresos` el código ya está organizado en los módulos de arriba (ADR-0015), con multi-cafetería por encabezado y membresías (ADR-0016), ingresos libres, catálogo de venta y el flujo completo de registrar ingreso probado por HTTP (`FlujoRegistrarIngresoIT`). `main` todavía tiene la versión por capas hasta que Joel haga el merge. Colección de Postman del flujo en `docs/postman/`. En la rama `feature/preparar-nube` está el API Gateway (ADR-0017): `infra/api-gateway/openapi.yaml` (OpenAPI 2.0, una ruta por endpoint bajo `/api` con su `OPTIONS` sin seguridad), `FirebaseAuthFilter` que prefiere `X-Forwarded-Authorization`, perfil `gcp` con `server.servlet.context-path=/api` y `jjskaffee.cors.origenes=${JJSKAFFEE_CORS_ORIGENES}`, `ContratoApiGatewayTest` (yaml ↔ controllers) y el paso a paso en `docs/despliegue/api-gateway.md`; falta montarlo en la nube. También está el WAF (ADR-0018): `infra/waf/crear-waf.ps1` y `eliminar-waf.ps1` (balanceador, serverless NEG hacia el gateway, Cloud Armor con reglas OWASP y límite por IP en modo preview, certificado para sslip.io), `OrigenWafFilter` (exige `X-JJSKaffee-Origen` antes que `FirebaseAuthFilter`), `jjskaffee.waf.secreto` (vacío en local y pruebas, `${JJSKAFFEE_WAF_SECRETO}` en `gcp`) y la guía `docs/despliegue/waf.md`; falta montarlo. **Todo endpoint nuevo se agrega también a `openapi.yaml`** (si no, `ContratoApiGatewayTest` falla). Pendiente: en el perfil `gcp`, Cloud SQL y `SecretsProvider` con Secret Manager (ADR-0014); hoy los secretos vienen de variables de entorno. Anular ingresos libres (hay columnas `anulado`/`motivo_anulacion`, sin caso de uso ni `GRANT UPDATE` todavía).
 
 Detalle de capas, adaptadores pendientes y recorrido de una petición:
-@docs/arquitectura/backend-hexagonal.md
+@docs/arquitectura/backend-monolito-modular.md
 
 ## Funcionalidad principal: registrar ingreso
 Flujo que debe funcionar de punta a punta:
@@ -78,6 +78,7 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
 
 ## Reglas no negociables
 - **Multi-tenant**: toda operación de negocio corre dentro de `UnidadDeTrabajo.ejecutar(usuario.idCafeteria(), ...)`. En BD: usuario de app limitado (nunca superusuario), `FORCE ROW LEVEL SECURITY` en toda tabla con datos de cafetería y la cafetería fijada por transacción. 0 % de fugas entre cafeterías.
+- **Origen por el WAF** (ADR-0018): en la nube toda petición debe traer `X-JJSKaffee-Origen` con el secreto que pone el balanceador; `OrigenWafFilter` responde 403 a lo que no lo traiga, antes de revisar el token y también en `OPTIONS`. Nunca se escribe el valor en el repo (vive en Secret Manager, `jjskaffee-waf-secreto`), nunca se agrega a CORS ni lo envía el frontend, y no se desactiva en `gcp`.
 - **Multi-cafetería por persona**: una persona puede pertenecer a varias cafeterías con un rol distinto en cada una. La única consulta sin cafetería fijada es la de "mis cafeterías", que usa `app.current_uid`; nunca se fijan `app.current_cafeteria` y `app.current_uid` en la misma transacción.
 - **Transacción todo o nada** para cada movimiento (venta con sus detalles juntos).
 - **Trazabilidad**: `idCafeteria`, usuario que registra y `fechaHora` los pone el servidor (desde `UsuarioAutenticado` y un `Clock` inyectado). Nunca aceptarlos en el cuerpo del request.
@@ -108,7 +109,8 @@ Ver `docs/negocio/negocio-y-alcance.md`. Si encuentras otra contradicción que n
 Índice completo en `docs/README.md`:
 - `docs/negocio/negocio-y-alcance.md`: producto, diferenciales, decisiones vigentes, fuera de alcance.
 - `docs/requisitos/requisitos-funcionales.md`: RF1–RF63 (★ = módulo ingresos/egresos).
-- `docs/arquitectura/adr/README.md`: ADR-0001…0017 y spikes, con implicaciones para el código.
+- `docs/arquitectura/adr/README.md`: ADR-0001…0018 y spikes, con implicaciones para el código.
 - `docs/despliegue/api-gateway.md`: montar el API Gateway delante de Cloud Run privado.
+- `docs/despliegue/waf.md`: montar, revisar, activar y quitar el WAF (Cloud Armor) delante del gateway.
 - `docs/calidad/atributos-y-escenarios.md`: prioridades, escenarios y tácticas.
 - `docs/restricciones/`: restricciones de negocio (legales: Ley 1581, DIAN, NIIF, laboral) y técnicas.

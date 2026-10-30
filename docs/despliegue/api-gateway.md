@@ -2,10 +2,12 @@
 
 > Decisión: [`doc/adr/adr-0017.md`](../../doc/adr/adr-0017.md). Archivo del gateway: [`infra/api-gateway/openapi.yaml`](../../infra/api-gateway/openapi.yaml).
 > Fuera de esta guía: Cloud SQL, Secret Manager (ADR-0014) y la imagen del backend. Aquí se supone que el backend ya está desplegado en Cloud Run.
+>
+> **Con el WAF (ADR-0018), el frontend ya no entra por `*.gateway.dev`, sino por el balanceador con Cloud Armor** (`https://<ip-con-guiones>.sslip.io/api`). Esta guía sigue siendo el primer paso: el balanceador apunta a este gateway. Después de montarlo, sigue con [`waf.md`](waf.md).
 
 ```
-Navegador ──(token de Firebase)──► API Gateway ──(token de gateway-invoker + X-Forwarded-Authorization)──► Cloud Run privado
-             https://<gateway>/api/...           valida el token de Firebase                                 /api/... (perfil gcp)
+Navegador ──► Balanceador + Cloud Armor (ADR-0018) ──► API Gateway ──(token de gateway-invoker + X-Forwarded-Authorization)──► Cloud Run privado
+              https://<ip-con-guiones>.sslip.io/api     valida el token de Firebase                                              /api/... (perfil gcp)
 ```
 
 - El gateway valida el token de Firebase (emisor `https://securetoken.google.com/jjskafee`, audiencia `jjskafee`) y rechaza con 401 lo que no lo traiga, antes de llegar a Cloud Run.
@@ -56,14 +58,14 @@ Cloud Run va con **`--no-allow-unauthenticated`**: nadie lo puede llamar desde i
 gcloud run services remove-iam-policy-binding $SERVICIO_RUN --region $REGION --member "allUsers" --role "roles/run.invoker"
 ```
 
-El backend debe correr con el perfil `gcp` y saber el origen del frontend (sin `JJSKAFFEE_CORS_ORIGENES` no arranca):
+El backend debe correr con el perfil `gcp`, saber el origen del frontend y tener `JJSKAFFEE_WAF_SECRETO` (sin cualquiera de las dos variables no arranca). Mientras no esté el WAF, `JJSKAFFEE_WAF_SECRETO` va vacía y el backend no exige el encabezado de origen. En el paso 3 de [`waf.md`](waf.md) se cambia por el secreto de Secret Manager.
 
 ```powershell
 gcloud run services update $SERVICIO_RUN --region $REGION `
-  --update-env-vars "SPRING_PROFILES_ACTIVE=gcp,JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app"
+  --update-env-vars "SPRING_PROFILES_ACTIVE=gcp,JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app,JJSKAFFEE_WAF_SECRETO="
 ```
 
-Con varios orígenes, la lista lleva comas; cambia el separador de `gcloud` así: `--update-env-vars "^;^SPRING_PROFILES_ACTIVE=gcp;JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app,https://jjskafee.firebaseapp.com"`.
+Con varios orígenes, la lista lleva comas; cambia el separador de `gcloud` así: `--update-env-vars "^;^SPRING_PROFILES_ACTIVE=gcp;JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app,https://jjskafee.firebaseapp.com;JJSKAFFEE_WAF_SECRETO="`.
 
 ## 3. Cuenta de servicio `gateway-invoker`
 
@@ -127,6 +129,8 @@ $BASE_URL
 
 ## 7. Probar
 
+Estas pruebas van directo al gateway (`*.gateway.dev`), para revisarlo **antes** de montar el WAF. Con el WAF montado, la URL `*.gateway.dev` responde 403 y las pruebas se hacen por el balanceador ([`waf.md`](waf.md), paso 4).
+
 Sin token, el gateway responde 401 sin llegar al backend (en el formato de Google, `{"code":401,"message":"Jwt is missing"}`, no en ProblemDetail):
 
 ```powershell
@@ -150,17 +154,17 @@ curl.exe -i -X OPTIONS "$BASE_URL/ingresos" `
 
 ### Postman
 
-Importa [`docs/postman/jjskaffee-registrar-ingreso.postman_collection.json`](../postman/jjskaffee-registrar-ingreso.postman_collection.json) y cambia la variable **`baseUrl` a `https://<gateway>/api`** (el valor de `$BASE_URL`). El resto queda igual: el token va en `Authorization: Bearer ...` (el gateway lo pasa a `X-Forwarded-Authorization`) y `X-Cafeteria-Id` e `Idempotency-Key` pasan sin cambios. Corre la colección en orden: login, mis cafeterías, yo, catálogo, venta, ingreso libre y movimientos.
+Importa [`docs/postman/jjskaffee-registrar-ingreso.postman_collection.json`](../postman/jjskaffee-registrar-ingreso.postman_collection.json) y cambia la variable **`baseUrl` a `https://<gateway>/api`** (el valor de `$BASE_URL`). Con el WAF montado, usa `https://<ip-con-guiones>.sslip.io/api`. El resto queda igual: el token va en `Authorization: Bearer ...` (el gateway lo pasa a `X-Forwarded-Authorization`) y `X-Cafeteria-Id` e `Idempotency-Key` pasan sin cambios. Corre la colección en orden: login, mis cafeterías, yo, catálogo, venta, ingreso libre y movimientos.
 
 ## 8. Frontend
 
 En el repo del frontend, la variable del build de producción es:
 
 ```
-VITE_API_URL=https://<gateway>/api
+VITE_API_URL=https://<ip-con-guiones>.sslip.io/api
 ```
 
-El cliente HTTP del frontend le agrega la ruta (`/acceso/cafeterias`, `/ingresos`, ...). En local sigue `VITE_API_URL=/api` con el proxy de Vite hacia `http://localhost:8080`. El origen donde se publique el frontend debe estar en `JJSKAFFEE_CORS_ORIGENES` (paso 2).
+Es la URL del balanceador con Cloud Armor (ADR-0018), no la del gateway: por `*.gateway.dev` el backend responde 403. Solo sin el WAF montado se usa `VITE_API_URL=https://<gateway>/api`. El cliente HTTP del frontend le agrega la ruta (`/acceso/cafeterias`, `/ingresos`, ...). En local sigue `VITE_API_URL=/api` con el proxy de Vite hacia `http://localhost:8080`. El origen donde se publique el frontend debe estar en `JJSKAFFEE_CORS_ORIGENES` (paso 2).
 
 ## Si algo falla
 
@@ -172,3 +176,4 @@ El cliente HTTP del frontend le agrega la ruta (`/acceso/cafeterias`, `/ingresos
 | 404 del gateway en una ruta que sí existe en el backend | Falta en `openapi.yaml` (`ContratoApiGatewayTest` debió fallar) o el gateway apunta a una api-config vieja |
 | 401 del backend con token válido | El backend leyó el token del gateway: revisa que llegue `X-Forwarded-Authorization` |
 | El navegador bloquea por CORS | Falta el origen del frontend en `JJSKAFFEE_CORS_ORIGENES` |
+| 403 `Acceso no permitido` por `*.gateway.dev` | Es lo esperado con el WAF montado: entra por el balanceador ([`waf.md`](waf.md)) |

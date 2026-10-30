@@ -1,6 +1,6 @@
 # Decisiones de arquitectura (ADR) y spikes
 
-> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel; ADR-0015 y ADR-0016 se escribieron en este repo; ADR-0017 se copió del repo de documentación (`jjskaffee-docs/adr/adr-0017.md`). Los textos completos están en `doc/adr/` y `doc/spikes/`.
+> Fuente: adr-0001.md … adr-0014.md y spike-01 … spike-06 del Project ISW2_Joel; ADR-0015 y ADR-0016 se escribieron en este repo; ADR-0017 se copió del repo de documentación (`jjskaffee-docs/adr/adr-0017.md`); ADR-0018 se escribió en este repo. Los textos completos están en `doc/adr/` y `doc/spikes/`.
 > Aquí está cada decisión, lo descartado, la evidencia y **lo que implica para el código**. Los análisis de costos y FODA de cada ADR (útiles para la sustentación, no para programar) siguen en el Project.
 
 | ADR | Decisión | Estado |
@@ -21,7 +21,8 @@
 | 0014 | Secretos en **Google Cloud Secret Manager**, leídos por un componente **Secrets Provider** | Propuesto (pedido por el profesor) |
 | 0015 | **Monolito modular con módulos hexagonales**, verificado con ArchUnit | Aceptado |
 | 0016 | Cafetería elegida con el encabezado **`X-Cafeteria-Id`**; rol por **membresía** (una persona, varias cafeterías) | Aceptado; reemplaza el claim de ADR-0001 y actualiza RF7 |
-| 0017 | **Google Cloud API Gateway** como única entrada pública; Cloud Run privado | Aceptado; archivo y código listos, pendiente de montar en la nube |
+| 0017 | **Google Cloud API Gateway** como única entrada pública; Cloud Run privado | Aceptado; archivo y código listos, pendiente de montar en la nube; desde ADR-0018 queda detrás del WAF |
+| 0018 | **WAF con Google Cloud Armor** y balanceador HTTPS delante del API Gateway; encabezado secreto `X-JJSKaffee-Origen` | Aceptado; scripts y código listos, pendiente de montar en la nube. Complementa ADR-0017 |
 
 ---
 
@@ -97,6 +98,14 @@
 - **Decisión**: Google Cloud API Gateway como única URL pública. Valida el token de Firebase (emisor `https://securetoken.google.com/jjskafee`, audiencia `jjskafee`) y es el único que puede invocar el backend (Cloud Run privado, `roles/run.invoker` solo para su cuenta de servicio). Complementa ADR-0001, ADR-0013 y ADR-0014.
 - **Descartados**: Spring Cloud Gateway (otro servicio para programar y operar), Cloud Run directo (backend expuesto), reescrituras de Firebase Hosting (no validan tokens ni dejan Cloud Run privado).
 - **En el código**: `infra/api-gateway/openapi.yaml` (OpenAPI 2.0) con una ruta por endpoint bajo `/api`, agrupadas con `tags` por módulo, `x-google-backend` con `APPEND_PATH_TO_ADDRESS` y `OPTIONS` sin seguridad para el preflight de CORS. `FirebaseAuthFilter` toma el token de `X-Forwarded-Authorization` si viene (el gateway pone el suyo en `Authorization`) y si no de `Authorization`; el backend sigue verificando token y membresía. Perfil `gcp` con `server.servlet.context-path=/api`; en local sin prefijo. `ContratoApiGatewayTest` verifica que el yaml y los controllers coincidan. Despliegue: `docs/despliegue/api-gateway.md`.
+
+## ADR-0018 · WAF con Cloud Armor delante del API Gateway
+- **Decisión**: balanceador de carga HTTPS externo global con Google Cloud Armor delante del API Gateway (serverless NEG). Recorrido: navegador → balanceador + Cloud Armor → API Gateway → Cloud Run privado → Cloud SQL. Sin dominio propio por ahora: IP estática global y `<ip-con-guiones>.sslip.io` con certificado de Google. Complementa ADR-0017 sin reemplazarlo.
+- **Por qué ahora**: el WAF no se contempló en el diseño inicial (la prioridad fue el aislamiento entre cafeterías y la autenticación); se vio que faltaba al revisar la Línea Base Técnica de la guía de evaluación.
+- **Descartados**: Cloudflare WAF (exige dominio propio en Cloudflare y otro proveedor), sin WAF (no cumple la guía), filtro dentro de la aplicación (no es un WAF real).
+- **Reglas**: OWASP preconfiguradas con sensibilidad 1 (`sqli`, `xss`, `lfi`, `rce`, `scannerdetection`, `protocolattack`, versión `v33-stable`) con `deny(403)`; límite de 100 peticiones por minuto por IP con `deny(429)`; por defecto, permitir. Todo empieza en modo preview.
+- **En el código**: la URL `*.gateway.dev` no se puede apagar. El balanceador agrega `X-JJSKaffee-Origen` con un secreto de Secret Manager (`jjskaffee-waf-secreto`) y `OrigenWafFilter` (`compartido.infraestructura.input.seguridad`) lo exige **antes** que `FirebaseAuthFilter`, incluido `OPTIONS`. Lo compara en tiempo constante y responde 403 con un mensaje genérico. Propiedad `jjskaffee.waf.secreto`: vacía en local y pruebas (no exige nada); en `gcp`, `${JJSKAFFEE_WAF_SECRETO}`. Scripts en `infra/waf/` y guía en `docs/despliegue/waf.md`.
+- **Riesgos**: la conexión balanceador → API Gateway está en Preview; `*.gateway.dev` sigue abierta (mitigado con el encabezado); falsos positivos (mitigados con preview y sensibilidad 1); `sslip.io` en vez de dominio propio. Costo: unos USD 31/mes; se borra con `eliminar-waf.ps1` después de la evaluación.
 
 ---
 
