@@ -67,6 +67,8 @@ En la nube se llaman con el prefijo `/api` a través del balanceador con Cloud A
 Navegador → Balanceador HTTPS + Cloud Armor (WAF) → API Gateway (serverless NEG) → Cloud Run privado → Cloud SQL
 ```
 
+Todo en el proyecto `jjskafee`, región `us-east1`. Se monta en este orden: `docs/despliegue/gcp.md` (Cloud SQL, imagen con el `Dockerfile`, Secret Manager, `backend-sa` y Cloud Run), `docs/despliegue/api-gateway.md` y `docs/despliegue/waf.md`.
+
 ### WAF con Cloud Armor (ADR-0018)
 La entrada pública es un **balanceador de carga HTTPS externo global con Google Cloud Armor**. Sin dominio propio por ahora, usa una IP estática y el dominio `https://<ip-con-guiones>.sslip.io/api`, con certificado de Google. Esa es la URL del frontend (`VITE_API_URL`) y de Postman.
 - Reglas OWASP preconfiguradas con sensibilidad 1 y `deny(403)`: `sqli`, `xss`, `lfi`, `rce`, `scannerdetection` y `protocolattack` (`v33-stable`). Límite de 100 peticiones por minuto por IP, con `deny(429)`. Por defecto, permitir. Todo empieza en modo preview (solo registra) hasta revisar los registros.
@@ -88,7 +90,8 @@ Google Cloud API Gateway queda detrás del balanceador. Cloud Run queda privado 
 - `PgUnidadDeTrabajo`: abre la transacción y fija `app.current_cafeteria` (para toda operación de negocio) o `app.current_uid` (solo para "mis cafeterías") con `set_config(..., true)`. La misma sentencia que fija una borra la otra: nunca quedan las dos activas.
 - `PgUsuarioRepository` (membresías), `PgVentaRepository` y `PgIngresoLibreRepository` (guardan con `INSERT ... ON CONFLICT (id_cafeteria, clave_idempotencia) DO NOTHING`), `PgEgresoRepository`, `PgCatalogoRepository`, `PgCatalogoDeVentaRepository` (productos y adiciones en una sola consulta), `PgCafeteriaRepository` (lee `cafeteria.activo`), `PgMovimientoRepository` (totales con `SUM ... FILTER` y página con `LIMIT/OFFSET` sobre `v_movimiento`).
 - `FirebaseAuthAdapter`: verifica el token y devuelve el `uid`.
-- Pendiente: `SecretsProvider` (Google Cloud Secret Manager) y Cloud SQL en el perfil `gcp` (ADR-0014). Hoy el perfil `gcp` solo pone el prefijo `/api`, los orígenes de CORS (`JJSKAFFEE_CORS_ORIGENES`) y el secreto del WAF (`JJSKAFFEE_WAF_SECRETO`).
+- Cloud SQL (perfil `gcp`): sin código propio. `JJSKAFFEE_DB_URL` usa el conector `postgres-socket-factory` (`jdbc:postgresql:///jjskaffee?cloudSqlInstance=jjskafee:us-east1:jjskaffee-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory`), que se conecta con la identidad de `backend-sa`, sin IP autorizada.
+- Secretos (ADR-0014): no hay clase `SecretsProvider`. Cloud Run lee `jjskaffee-db-clave` y `jjskaffee-waf-secreto` de Secret Manager al arrancar (`--set-secrets`) y los entrega como `JJSKAFFEE_DB_CLAVE` y `JJSKAFFEE_WAF_SECRETO`. Firebase usa las credenciales de `backend-sa`. Despliegue: `docs/despliegue/gcp.md`.
 
 **Base de datos**: PostgreSQL en Cloud SQL con RLS forzado en toda tabla con datos de cafetería. Scripts en `db/` (01–10), en orden: migraciones y seeds de prueba por separado. `usuarios` guarda membresías (UNIQUE `(id_cafeteria, firebase_uid)`); `v_movimiento` une ventas confirmadas, ingresos libres y egresos no anulados, con `security_invoker`.
 
@@ -164,4 +167,4 @@ Un ingreso es una **venta** de productos del menú (`POST /ingresos`, tabla `ven
 - Integración contra PostgreSQL (`./mvnw verify`, paquete `integracion`): `AislamientoEntreCafeteriasIT`, `MultiCafeteriaIT`, `AccesoControllerIT`, `IngresosYEgresosPostgresIT`, `RegistrarIngresoValidacionesIT`, `IngresosLibresIT`, `CatalogoDeVentaIT`, `TransaccionTodoONadaIT`, `MovimientosControllerIT` y `FlujoRegistrarIngresoIT` (el flujo completo por HTTP). Usan un reloj fijo en 2099 y deshacen sus cambios. `ConfiguracionDePrueba` traduce cada token de prueba a un `uid`; la membresía sale de los seeds reales.
 
 ## Calidad en CI
-GitHub Actions (`.github/workflows/seguridad.yml`): crea la base con los scripts `db/01`…`db/10` en orden, corre `./mvnw verify` (unitarias, ArchUnit, contrato del API Gateway e integración) y escanea con **Trivy** (el `pom.xml` fuerza `tomcat.version`, `jackson-bom.version` y `guava.version` por CVEs reportados; Guava, con una entrada en `dependencyManagement` porque Spring Boot no la maneja).
+GitHub Actions (`.github/workflows/seguridad.yml`): crea la base con los scripts `db/01`…`db/10` en orden, corre `./mvnw verify` (unitarias, ArchUnit, contrato del API Gateway e integración) y escanea con **Trivy** dependencias, secretos y la configuración del `Dockerfile` (el `pom.xml` fuerza `tomcat.version`, `jackson-bom.version` y `guava.version` por CVEs reportados; Guava, con una entrada en `dependencyManagement` porque Spring Boot no la maneja).

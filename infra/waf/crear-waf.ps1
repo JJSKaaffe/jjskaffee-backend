@@ -11,9 +11,9 @@
 # este script lo crea o lo lee, nunca lo imprime y nunca se escribe en el repo.
 # -----------------------------------------------------------------------------
 
-# ----- Variables (cámbialas antes de correrlo) -----
-$PROJECT_ID      = "PROJECT_ID"
-$REGION          = "REGION"              # la región del API Gateway, p. ej. us-central1
+# ----- Variables (revísalas antes de correrlo; las mismas de docs/despliegue/gcp.md) -----
+$PROJECT_ID      = "jjskafee"
+$REGION          = "us-east1"            # la región del API Gateway (la misma de Cloud Run y Cloud SQL)
 $GATEWAY_ID      = "jjskaffee-gateway"   # el mismo de docs/despliegue/api-gateway.md
 $NOMBRE_POLITICA = "jjskaffee-waf"
 
