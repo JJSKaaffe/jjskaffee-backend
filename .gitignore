@@ -44,3 +44,6 @@ reporte-trivy.txt
 *-firebase-adminsdk-*.json
 service-account*.json
 /target-test.log
+
+### API Gateway (ADR-0017): la copia con la URL real de Cloud Run no se sube ###
+infra/api-gateway/openapi.desplegado.yaml

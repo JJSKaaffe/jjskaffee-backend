@@ -34,7 +34,18 @@
         <!-- Jackson 2 lo trae firebase-admin (Firestore): CVE-2026-89407, -89425, -68497, -91776, -91777 -->
         <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <firebase-admin.version>9.11.0</firebase-admin.version>
+        <!-- Guava lo trae firebase-admin (33.6.0-jre): CVE-2026-102554. Spring Boot no la maneja: ver dependencyManagement -->
+        <guava.version>33.7.2-jre</guava.version>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -7,8 +7,8 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Orígenes del frontend que pueden llamar la API directamente (p. ej. Vite en local).
- * Vacío = ninguno (detrás del API Gateway no hace falta).
+ * Orígenes del frontend que pueden llamar la API (Vite en local; en la nube, el del frontend publicado).
+ * Detrás del API Gateway el preflight (OPTIONS) llega sin token hasta aquí (ADR-0017). Vacío = ninguno.
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {

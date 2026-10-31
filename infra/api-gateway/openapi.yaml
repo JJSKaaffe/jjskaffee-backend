@@ -1,0 +1,353 @@
+# API Gateway de JJSKaffee (ADR-0017). Google Cloud API Gateway solo acepta OpenAPI 2.0.
+# El gateway no tiene lógica: valida el token de Firebase y enruta a Cloud Run. Los permisos por rol
+# y la cafetería (X-Cafeteria-Id) los revisa el backend.
+#
+# Reglas (diseno/03-diagrama-paquetes.md, sección 3):
+#   1. Toda ruta, salvo OPTIONS, exige security: firebase.
+#   2. Las rutas son las del backend con el prefijo /api; no se renombran ni se combinan.
+#   3. Sin lógica de negocio.
+#   4. Los encabezados propios (X-Cafeteria-Id, Idempotency-Key) pasan sin cambios.
+# Cada endpoint nuevo del backend se agrega aquí; ContratoApiGatewayTest lo verifica.
+#
+# Este archivo lleva el marcador de la URL de Cloud Run. Para desplegar se genera
+# openapi.desplegado.yaml con la URL real (no se sube a git): ver docs/despliegue/api-gateway.md.
+swagger: "2.0"
+info:
+  title: jjskaffee-api
+  description: Entrada pública al backend de JJSKaffee (Cloud Run privado).
+  version: "1.0.0"
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+  - application/problem+json
+
+# Todas las rutas van al mismo backend. APPEND_PATH_TO_ADDRESS conserva la ruta completa (/api/...),
+# por eso el perfil gcp usa server.servlet.context-path=/api. Con jwt_audience el gateway llama a Cloud Run
+# con el token de su cuenta de servicio y reenvía el token original en X-Forwarded-Authorization.
+x-google-backend:
+  address: CLOUD_RUN_URL
+  path_translation: APPEND_PATH_TO_ADDRESS
+  jwt_audience: CLOUD_RUN_URL
+  deadline: 15
+
+securityDefinitions:
+  firebase:
+    type: oauth2
+    flow: implicit
+    authorizationUrl: ""
+    x-google-issuer: "https://securetoken.google.com/jjskafee"
+    x-google-jwks_uri: "https://www.googleapis.com/service_accounts/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+    x-google-audiences: "jjskafee"
+
+security:
+  - firebase: []
+
+tags:
+  - name: acceso
+    description: Cafeterías del usuario y rol en la cafetería elegida (ADR-0016)
+  - name: ingresos
+    description: Ventas, ingresos libres y catálogo de la pantalla de venta
+  - name: egresos
+    description: Egresos (solo administrador)
+  - name: movimientos
+    description: Consulta de ingresos y egresos con filtros y totales
+
+parameters:
+  cafeteria:
+    name: X-Cafeteria-Id
+    in: header
+    required: true
+    type: string
+    format: uuid
+    description: Cafetería elegida (ADR-0016). Sin él, 400; sin membresía activa, 403.
+  idempotencia:
+    name: Idempotency-Key
+    in: header
+    required: false
+    type: string
+    format: uuid
+    description: Un reintento con la misma clave devuelve el registro ya creado.
+  idVenta:
+    name: idVenta
+    in: path
+    required: true
+    type: string
+    format: uuid
+
+responses:
+  preflight:
+    description: Respuesta de CORS del backend.
+  noAutenticado:
+    description: Sin token o token inválido.
+  datosInvalidos:
+    description: Datos inválidos (incluye falta de X-Cafeteria-Id o que no sea UUID).
+  sinPermiso:
+    description: Sin membresía activa en la cafetería o sin permiso para la acción.
+
+paths:
+  # ----- acceso -----
+  /api/acceso/cafeterias:
+    get:
+      tags: [acceso]
+      operationId: misCafeterias
+      summary: Cafeterías del usuario con su rol en cada una. Solo lleva el token, sin X-Cafeteria-Id.
+      responses:
+        "200":
+          description: Lista de cafeterías.
+        "401":
+          $ref: "#/responses/noAutenticado"
+    options:
+      tags: [acceso]
+      operationId: preflightMisCafeterias
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  /api/acceso/yo:
+    get:
+      tags: [acceso]
+      operationId: yo
+      summary: Rol y permisos en la cafetería elegida.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+      responses:
+        "200":
+          description: Usuario con rol y permisos.
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+    options:
+      tags: [acceso]
+      operationId: preflightYo
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  # ----- ingresos -----
+  /api/ingresos/catalogo:
+    get:
+      tags: [ingresos]
+      operationId: catalogo
+      summary: Productos, adiciones y precios de la pantalla de venta; categorías de ingreso para el administrador.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+      responses:
+        "200":
+          description: Catálogo de venta.
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+    options:
+      tags: [ingresos]
+      operationId: preflightCatalogo
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  /api/ingresos:
+    post:
+      tags: [ingresos]
+      operationId: registrarIngreso
+      summary: Registra una venta (cajero o administrador); el total lo calcula el servidor.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+        - $ref: "#/parameters/idempotencia"
+        - name: solicitud
+          in: body
+          required: true
+          description: IngresoRequest (productos con cantidad y adiciones).
+          schema:
+            type: object
+      responses:
+        "201":
+          description: Venta registrada (o la ya registrada con la misma Idempotency-Key).
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+        "404":
+          description: Un producto no existe en el catálogo de la cafetería.
+        "422":
+          description: Regla de negocio incumplida.
+    options:
+      tags: [ingresos]
+      operationId: preflightRegistrarIngreso
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  /api/ingresos/{idVenta}/deshacer:
+    post:
+      tags: [ingresos]
+      operationId: deshacerIngreso
+      summary: Deshace una venta; solo quien la registró y dentro de 60 s.
+      parameters:
+        - $ref: "#/parameters/idVenta"
+        - $ref: "#/parameters/cafeteria"
+      responses:
+        "204":
+          description: Venta deshecha.
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+        "404":
+          description: La venta no existe en la cafetería.
+        "422":
+          description: Ya pasó el tiempo para deshacerla o ya estaba anulada.
+    options:
+      tags: [ingresos]
+      operationId: preflightDeshacerIngreso
+      security: []
+      parameters:
+        - $ref: "#/parameters/idVenta"
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  /api/ingresos/libres:
+    post:
+      tags: [ingresos]
+      operationId: registrarIngresoLibre
+      summary: Registra un ingreso libre (monto + categoría de ingreso); solo el administrador.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+        - $ref: "#/parameters/idempotencia"
+        - name: solicitud
+          in: body
+          required: true
+          description: IngresoLibreRequest (categoría, monto, descripción y comprobante opcional).
+          schema:
+            type: object
+      responses:
+        "201":
+          description: Ingreso libre registrado (o el ya registrado con la misma Idempotency-Key).
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+        "404":
+          description: La categoría no existe en la cafetería.
+        "422":
+          description: Regla de negocio incumplida.
+    options:
+      tags: [ingresos]
+      operationId: preflightRegistrarIngresoLibre
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  # ----- egresos -----
+  /api/egresos:
+    post:
+      tags: [egresos]
+      operationId: registrarEgreso
+      summary: Registra un egreso; solo el administrador.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+        - name: solicitud
+          in: body
+          required: true
+          description: EgresoRequest (categoría, monto, descripción y comprobante opcional).
+          schema:
+            type: object
+      responses:
+        "201":
+          description: Egreso registrado.
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+        "404":
+          description: La categoría no existe en la cafetería.
+        "422":
+          description: Regla de negocio incumplida.
+    options:
+      tags: [egresos]
+      operationId: preflightRegistrarEgreso
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
+
+  # ----- movimientos -----
+  /api/movimientos:
+    get:
+      tags: [movimientos]
+      operationId: consultarMovimientos
+      summary: Movimientos con filtros, página y totales de todo el filtro. El cajero solo ve lo suyo.
+      parameters:
+        - $ref: "#/parameters/cafeteria"
+        - name: desde
+          in: query
+          required: false
+          type: string
+          format: date
+          description: Fecha inicial (hora de Colombia).
+        - name: hasta
+          in: query
+          required: false
+          type: string
+          format: date
+          description: Fecha final (hora de Colombia), incluye todo el día.
+        - name: tipo
+          in: query
+          required: false
+          type: string
+          enum: [INGRESO, EGRESO]
+        - name: idCategoria
+          in: query
+          required: false
+          type: string
+          format: uuid
+        - name: pagina
+          in: query
+          required: false
+          type: integer
+          minimum: 0
+          default: 0
+        - name: tamano
+          in: query
+          required: false
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      responses:
+        "200":
+          description: Página de movimientos con totales.
+        "400":
+          $ref: "#/responses/datosInvalidos"
+        "401":
+          $ref: "#/responses/noAutenticado"
+        "403":
+          $ref: "#/responses/sinPermiso"
+    options:
+      tags: [movimientos]
+      operationId: preflightConsultarMovimientos
+      security: []
+      responses:
+        "200":
+          $ref: "#/responses/preflight"
