@@ -18,7 +18,7 @@
 | 0011 | IA, notificaciones y exportación con **proveedores/librerías externas**; **sin pasarela de pagos** | Aceptado |
 | 0012 | **PostgreSQL** (por Row Level Security nativo) | Aceptado |
 | 0013 | Nube: **Google Cloud Platform** (Cloud SQL para PostgreSQL) | Aceptado |
-| 0014 | Secretos en **Google Cloud Secret Manager**, leídos por un componente **Secrets Provider** | Propuesto (pedido por el profesor) |
+| 0014 | Secretos en **Google Cloud Secret Manager**, leídos por un componente **Secrets Provider** | Propuesto (pedido por el profesor); implementado con `--set-secrets` de Cloud Run (nota al final del ADR, `docs/despliegue/gcp.md`) |
 | 0015 | **Monolito modular con módulos hexagonales**, verificado con ArchUnit | Aceptado |
 | 0016 | Cafetería elegida con el encabezado **`X-Cafeteria-Id`**; rol por **membresía** (una persona, varias cafeterías) | Aceptado; reemplaza el claim de ADR-0001 y actualiza RF7 |
 | 0017 | **Google Cloud API Gateway** como única entrada pública; Cloud Run privado | Aceptado; archivo y código listos, pendiente de montar en la nube; desde ADR-0018 queda detrás del WAF |
@@ -83,6 +83,7 @@
 ## ADR-0014 · Vault de secretos
 - **Decisión**: Google Cloud Secret Manager para credenciales de PostgreSQL, API key de IA, FCM y API de anuncios. El backend las lee por un único componente **Secrets Provider** con una cuenta de servicio de solo lectura. Descartados: variables de entorno (sin auditoría ni rotación), HashiCorp Vault (operación costosa), AWS Secrets Manager (segunda nube).
 - **En el código**: **ningún secreto en el repositorio**; `.env` en `.gitignore`, solo se versiona `.env.example` sin valores. En C4: contenedor "Vault de secretos" (nivel 2) y componente "Secrets Provider" (nivel 3).
+- **Cómo quedó** (nota al final del ADR): el "Secrets Provider" es Cloud Run. Lee `jjskaffee-db-clave` y `jjskaffee-waf-secreto` al arrancar (`--set-secrets`) y los entrega como `JJSKAFFEE_DB_CLAVE` y `JJSKAFFEE_WAF_SECRETO`. Solo `backend-sa` tiene `secretAccessor`, secreto por secreto. Firebase y Cloud SQL usan la identidad de `backend-sa`, sin secreto. No hay clase `SecretsProvider` en el backend.
 
 ## ADR-0015 · Monolito modular con módulos hexagonales
 - **Decisión**: una sola aplicación Spring Boot dividida en módulos de negocio (`compartido`, `acceso`, `ingresos`, `egresos`, `movimientos`); cada módulo con `dominio`, `servicios` e `infraestructura`. Complementa ADR-0006.

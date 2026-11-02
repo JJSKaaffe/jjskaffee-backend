@@ -1,7 +1,7 @@
 # Desplegar el API Gateway (ADR-0017)
 
 > Decisión: [`doc/adr/adr-0017.md`](../../doc/adr/adr-0017.md). Archivo del gateway: [`infra/api-gateway/openapi.yaml`](../../infra/api-gateway/openapi.yaml).
-> Fuera de esta guía: Cloud SQL, Secret Manager (ADR-0014) y la imagen del backend. Aquí se supone que el backend ya está desplegado en Cloud Run.
+> Antes: el backend ya debe estar desplegado en Cloud Run, privado y con Cloud SQL y Secret Manager ([`gcp.md`](gcp.md)).
 >
 > **Con el WAF (ADR-0018), el frontend ya no entra por `*.gateway.dev`, sino por el balanceador con Cloud Armor** (`https://<ip-con-guiones>.sslip.io/api`). Esta guía sigue siendo el primer paso: el balanceador apunta a este gateway. Después de montarlo, sigue con [`waf.md`](waf.md).
 
@@ -20,20 +20,20 @@ Navegador ──► Balanceador + Cloud Armor (ADR-0018) ──► API Gateway �
 | Marcador | Qué es | Ejemplo |
 |---|---|---|
 | `PROJECT_ID` | Proyecto de Google Cloud | `jjskafee` |
-| `REGION` | Región del gateway y del servicio de Cloud Run | `us-central1` |
-| `CLOUD_RUN_URL` | URL del servicio de Cloud Run, **sin `/` al final** | `https://jjskaffee-backend-abc123-uc.a.run.app` |
+| `REGION` | Región del gateway y del servicio de Cloud Run | `us-east1` |
+| `CLOUD_RUN_URL` | URL del servicio de Cloud Run, **sin `/` al final** | `https://jjskaffee-backend-abc123-ue.a.run.app` |
 
-API Gateway solo existe en algunas regiones (p. ej. `us-central1`, `us-east1`, `us-east4`, `us-west2`, `europe-west1`, `asia-northeast1`). Si Cloud Run está en otra región (p. ej. `southamerica-east1`), usa esa región en los comandos `gcloud run ...` y una región soportada para el gateway.
+API Gateway solo existe en algunas regiones; `us-east1` es una de ellas, así que el gateway, Cloud Run y Cloud SQL quedan en la misma región ([`gcp.md`](gcp.md)).
 
 Todos los comandos son de PowerShell y se corren desde la raíz del repo del backend.
 
 ## 0. Variables
 
 ```powershell
-$PROJECT_ID    = "PROJECT_ID"
-$REGION        = "REGION"
-$CLOUD_RUN_URL = "CLOUD_RUN_URL"
-$SERVICIO_RUN  = "jjskaffee-backend"          # nombre del servicio en Cloud Run
+$PROJECT_ID    = "jjskafee"
+$REGION        = "us-east1"
+$SERVICIO_RUN  = "jjskaffee-backend"          # nombre del servicio en Cloud Run (gcp.md, paso 7)
+$CLOUD_RUN_URL = (gcloud run services describe $SERVICIO_RUN --region $REGION --project $PROJECT_ID --format "value(status.url)").Trim()
 $API_ID        = "jjskaffee-api"
 $GATEWAY_ID    = "jjskaffee-gateway"
 $CONFIG_ID     = "jjskaffee-config-$(Get-Date -Format 'yyyyMMdd-HHmm')"   # las api-config no se editan: cada cambio es una nueva
@@ -52,20 +52,19 @@ gcloud services enable apigateway.googleapis.com servicemanagement.googleapis.co
 
 ## 2. Cloud Run privado y con el perfil `gcp`
 
-Cloud Run va con **`--no-allow-unauthenticated`**: nadie lo puede llamar desde internet, solo la cuenta del gateway. Al desplegar el backend, incluye esa opción en `gcloud run deploy`. Si el servicio ya estaba público, quítale el acceso a `allUsers`:
+Cloud Run va con **`--no-allow-unauthenticated`**: nadie lo puede llamar desde internet, solo la cuenta del gateway. El paso 7 de [`gcp.md`](gcp.md) ya lo despliega así, con el perfil `gcp`, los dos orígenes de Firebase Hosting en `JJSKAFFEE_CORS_ORIGENES` y `JJSKAFFEE_WAF_SECRETO` vacía (mientras no esté el WAF, el backend no exige el encabezado de origen; el paso 3 de [`waf.md`](waf.md) la cambia por el secreto de Secret Manager). Sin cualquiera de esas dos variables, el backend no arranca.
+
+Si el servicio llegó a quedar público, quítale el acceso a `allUsers`:
 
 ```powershell
 gcloud run services remove-iam-policy-binding $SERVICIO_RUN --region $REGION --member "allUsers" --role "roles/run.invoker"
 ```
 
-El backend debe correr con el perfil `gcp`, saber el origen del frontend y tener `JJSKAFFEE_WAF_SECRETO` (sin cualquiera de las dos variables no arranca). Mientras no esté el WAF, `JJSKAFFEE_WAF_SECRETO` va vacía y el backend no exige el encabezado de origen. En el paso 3 de [`waf.md`](waf.md) se cambia por el secreto de Secret Manager.
+Comprueba las variables (no muestra la clave de la base: es una referencia al secreto):
 
 ```powershell
-gcloud run services update $SERVICIO_RUN --region $REGION `
-  --update-env-vars "SPRING_PROFILES_ACTIVE=gcp,JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app,JJSKAFFEE_WAF_SECRETO="
+gcloud run services describe $SERVICIO_RUN --region $REGION --format "yaml(spec.template.spec.containers[0].env)"
 ```
-
-Con varios orígenes, la lista lleva comas; cambia el separador de `gcloud` así: `--update-env-vars "^;^SPRING_PROFILES_ACTIVE=gcp;JJSKAFFEE_CORS_ORIGENES=https://jjskafee.web.app,https://jjskafee.firebaseapp.com;JJSKAFFEE_WAF_SECRETO="`.
 
 ## 3. Cuenta de servicio `gateway-invoker`
 
@@ -175,5 +174,5 @@ Es la URL del balanceador con Cloud Armor (ADR-0018), no la del gateway: por `*.
 | 404 en todas las rutas | El backend no corre con el perfil `gcp` (falta el prefijo `/api`) o la URL de Cloud Run quedó con `/` al final |
 | 404 del gateway en una ruta que sí existe en el backend | Falta en `openapi.yaml` (`ContratoApiGatewayTest` debió fallar) o el gateway apunta a una api-config vieja |
 | 401 del backend con token válido | El backend leyó el token del gateway: revisa que llegue `X-Forwarded-Authorization` |
-| El navegador bloquea por CORS | Falta el origen del frontend en `JJSKAFFEE_CORS_ORIGENES` |
+| El navegador bloquea por CORS | Falta el origen del frontend en `JJSKAFFEE_CORS_ORIGENES` ([`gcp.md`](gcp.md), paso 7) |
 | 403 `Acceso no permitido` por `*.gateway.dev` | Es lo esperado con el WAF montado: entra por el balanceador ([`waf.md`](waf.md)) |

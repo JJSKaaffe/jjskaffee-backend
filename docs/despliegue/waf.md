@@ -27,7 +27,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ## 2. Crear el WAF
 
-Abre `infra/waf/crear-waf.ps1` y cambia las variables de arriba: `PROJECT_ID`, `REGION` (la del API Gateway), `GATEWAY_ID` y `NOMBRE_POLITICA`. Luego, desde la raíz del repo:
+Las variables de arriba de `infra/waf/crear-waf.ps1` ya traen los valores del despliegue: `PROJECT_ID = jjskafee`, `REGION = us-east1` (la del API Gateway), `GATEWAY_ID = jjskaffee-gateway` y `NOMBRE_POLITICA = jjskaffee-waf`. Revísalas y, desde la raíz del repo:
 
 ```powershell
 .\infra\waf\crear-waf.ps1
@@ -54,21 +54,17 @@ Si el script falla a la mitad, corre `eliminar-waf.ps1` y vuelve a empezar.
 Hazlo **cuando el certificado esté `ACTIVE`**. Desde ese momento la URL `*.gateway.dev` responde 403 y el frontend debe usar la nueva (paso 7).
 
 ```powershell
-$PROJECT_ID   = "PROJECT_ID"
-$REGION_RUN   = "REGION"               # la región del servicio de Cloud Run
+$PROJECT_ID   = "jjskafee"
+$REGION_RUN   = "us-east1"             # la región del servicio de Cloud Run
 $SERVICIO_RUN = "jjskaffee-backend"
 
-# Cuenta con la que corre Cloud Run (si sale vacío, es la cuenta de Compute por defecto)
-$SA_RUN = gcloud run services describe $SERVICIO_RUN --region $REGION_RUN --format "value(spec.template.spec.serviceAccountName)"
-if (-not $SA_RUN) {
-    $NUMERO = gcloud projects describe $PROJECT_ID --format "value(projectNumber)"
-    $SA_RUN = "$NUMERO-compute@developer.gserviceaccount.com"
-}
+# Cuenta con la que corre Cloud Run (gcp.md, paso 6)
+$SA_RUN = "backend-sa@$PROJECT_ID.iam.gserviceaccount.com"
 
-# Que pueda leer solo este secreto
+# Que pueda leer solo este secreto (ya lee jjskaffee-db-clave, también solo ese)
 gcloud secrets add-iam-policy-binding jjskaffee-waf-secreto --member "serviceAccount:$SA_RUN" --role "roles/secretmanager.secretAccessor"
 
-# En el paso 2 de api-gateway.md quedó como variable vacía: se quita, porque Cloud Run no deja tener
+# En el paso 7 de gcp.md quedó como variable vacía: se quita, porque Cloud Run no deja tener
 # una variable y un secreto con el mismo nombre
 gcloud run services update $SERVICIO_RUN --region $REGION_RUN --remove-env-vars JJSKAFFEE_WAF_SECRETO
 
@@ -180,7 +176,7 @@ El valor se puede ver en la configuración del backend service. Por eso solo el 
 |---|---|
 | Error de certificado o de conexión HTTPS en el dominio sslip.io | El certificado todavía no está `ACTIVE` (hasta 60 minutos) |
 | 403 `Acceso no permitido` entrando por el dominio sslip.io | El secreto de Cloud Run y el del backend service no coinciden: vuelve a correr el bloque de "Cambiar el secreto" |
-| Cloud Run no arranca después del paso 3 | La cuenta de Cloud Run no tiene `roles/secretmanager.secretAccessor` sobre `jjskaffee-waf-secreto` |
+| Cloud Run no arranca después del paso 3 | `backend-sa` no tiene `roles/secretmanager.secretAccessor` sobre `jjskaffee-waf-secreto` |
 | 403 de Cloud Armor en una petición legítima | Falso positivo: búscalo en el paso 5 y excluye la firma |
 | 404 o 502 del balanceador | La NEG apunta a otro `GATEWAY_ID` o a otra región |
 | El navegador bloquea por CORS | El preflight también pasa por el WAF; revisa `JJSKAFFEE_CORS_ORIGENES` y que el preflight no esté marcado en el paso 5 |

@@ -1,0 +1,37 @@
+# Lo que NO entra al contexto de la imagen (Dockerfile). La imagen solo necesita mvnw, .mvn, pom.xml y src.
+
+# Git, IDE y herramientas
+.git
+.gitattributes
+.gitignore
+.github
+.idea
+.vscode
+.claude
+skills-lock.json
+*.iml
+
+# Compilados locales: la imagen compila desde cero
+target
+
+# Secretos (ADR-0014): nunca entran a la imagen, estén donde estén. Todo JSON queda fuera
+# (credenciales de cuentas de servicio, colección de Postman); si algún día src/main/resources necesita
+# un JSON, agrega aquí una excepción para ese archivo exacto (!src/main/resources/<archivo>.json).
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.json
+
+# Infraestructura, documentación y scripts de base de datos: no se usan en tiempo de ejecución
+infra
+docs
+doc
+db
+README.md
+CLAUDE.md
+HELP.md
+reporte-trivy.txt
+Dockerfile
+.dockerignore

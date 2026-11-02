@@ -13,6 +13,8 @@ API REST del sistema de gestión financiera **multi-tenant** para cafeterías pe
 | [`doc/adr`](doc/adr) | Registros de decisiones de arquitectura (ADR-0001 a ADR-0018) |
 | [`doc/spikes`](doc/spikes) | Spikes técnicos que validan las decisiones (SPIKE-01 a SPIKE-06) |
 | [`docs/postman`](docs/postman) | Colección de Postman con el flujo de registrar ingreso |
+| [`docs/despliegue`](docs/despliegue/gcp.md) | Despliegue en Google Cloud, en orden: [`gcp.md`](docs/despliegue/gcp.md) (Cloud SQL, imagen, Secret Manager y Cloud Run), [`api-gateway.md`](docs/despliegue/api-gateway.md) y [`waf.md`](docs/despliegue/waf.md) |
+| [`Dockerfile`](Dockerfile) | Imagen del backend para Cloud Run: compila con el Maven wrapper y corre con Temurin 27 (JRE) como usuario sin privilegios |
 | [`infra/api-gateway`](infra/api-gateway/openapi.yaml) | Configuración del API Gateway (OpenAPI 2.0); despliegue en [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md) |
 | [`infra/waf`](infra/waf) | Scripts para crear y borrar el WAF (Cloud Armor + balanceador); guía en [`docs/despliegue/waf.md`](docs/despliegue/waf.md) |
 
@@ -81,7 +83,7 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
 - Base de datos: PostgreSQL 17 con Row Level Security (Cloud SQL, GCP)
 - Autenticación: Firebase Authentication
 - Notificaciones: Firebase Cloud Messaging
-- Nube: Google Cloud Platform (balanceador + Cloud Armor, API Gateway y Cloud Run) · Secretos: Google Cloud Secret Manager
+- Nube: Google Cloud Platform (balanceador + Cloud Armor, API Gateway, Cloud Run con imagen Docker en Artifact Registry y Cloud SQL con el conector de Java) · Secretos: Google Cloud Secret Manager, entregados por Cloud Run
 - CI: GitHub Actions con pruebas, ArchUnit y Trivy
 
 ## Cómo correrlo
@@ -92,7 +94,8 @@ Respuestas de acceso: sin token o token inválido → 401; falta `X-Cafeteria-Id
    - `./mvnw test`: pruebas unitarias y `ArquitecturaTest`, sin base de datos.
    - `./mvnw verify`: además, las pruebas de integración `*IT` contra PostgreSQL.
    - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`: levanta la API en `http://localhost:8080` (sin el prefijo `/api`; en la nube el perfil `gcp` atiende bajo `/api` detrás del API Gateway).
-4. En la nube: primero [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md) y después [`docs/despliegue/waf.md`](docs/despliegue/waf.md).
+4. Imagen en local (opcional): `docker build -t jjskaffee-backend:local .`
+5. En la nube (proyecto `jjskafee`, región `us-east1`): [`docs/despliegue/gcp.md`](docs/despliegue/gcp.md) (Cloud SQL, imagen, Secret Manager y Cloud Run), después [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md) y por último [`docs/despliegue/waf.md`](docs/despliegue/waf.md). La guía termina con cómo apagar y borrar todo antes de que venza el crédito (29 de enero de 2027).
 
 ## Equipo
 

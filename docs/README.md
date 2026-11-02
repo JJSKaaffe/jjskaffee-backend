@@ -13,6 +13,7 @@ Exportada del Project de Claude "ISW2_Joel" el 12 de octubre de 2026 para que Cl
 | `arquitectura/backend-monolito-modular.md` | Monolito modular: módulos, capas, reglas ArchUnit, endpoints, entrada pública (WAF y API Gateway), reglas de negocio del código | Diagrama hexagonal + código |
 | `arquitectura/img/hexagonal-ingresos-egresos.png` | Diagrama de arquitectura hexagonal | Hexagonal ingresos y egresos.png |
 | `arquitectura/adr/README.md` | ADR-0001…0018 y SPIKE-01…06 resumidos (texto completo en `doc/adr/` y `doc/spikes/`) | adr-*.md, spike-* |
+| `despliegue/gcp.md` | Paso a paso en Google Cloud (PowerShell + gcloud): APIs, Cloud SQL, claves en Secret Manager, scripts `db/` desde Cloud Shell, imagen con Cloud Build, `backend-sa`, Cloud Run privado, verificación y cómo apagar y borrar todo | ADR-0012, ADR-0013, ADR-0014 + este repo |
 | `despliegue/api-gateway.md` | Paso a paso para montar el API Gateway delante de Cloud Run privado (PowerShell + gcloud) | ADR-0017 + este repo |
 | `despliegue/waf.md` | Montar, revisar, activar y quitar el WAF (balanceador + Cloud Armor) delante del API Gateway | ADR-0018 + este repo |
 | `postman/jjskaffee-registrar-ingreso.postman_collection.json` | Colección de Postman con el flujo login → elegir cafetería → rol → registrar ingreso → movimientos | Este repo |

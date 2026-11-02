@@ -1,0 +1,33 @@
+# Lo que gcloud builds submit NO sube a Cloud Build (docs/despliegue/gcp.md, paso 5).
+# Mismo criterio que .dockerignore, pero aquí sí se suben Dockerfile y .dockerignore: Cloud Build los necesita.
+# Sin este archivo gcloud usaría el .gitignore, que deja pasar docs, infra y db.
+
+.git
+.gitattributes
+.gitignore
+.gcloudignore
+.github
+.idea
+.vscode
+.claude
+skills-lock.json
+*.iml
+
+target
+
+# Secretos (ADR-0014): nunca salen del PC
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.json
+
+infra
+docs
+doc
+db
+README.md
+CLAUDE.md
+HELP.md
+reporte-trivy.txt

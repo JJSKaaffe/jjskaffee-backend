@@ -10,8 +10,8 @@
 # -----------------------------------------------------------------------------
 
 # ----- Variables: las mismas de crear-waf.ps1 -----
-$PROJECT_ID      = "PROJECT_ID"
-$REGION          = "REGION"
+$PROJECT_ID      = "jjskafee"
+$REGION          = "us-east1"
 $GATEWAY_ID      = "jjskaffee-gateway"   # no se borra; está aquí para que las variables sean las mismas
 $NOMBRE_POLITICA = "jjskaffee-waf"
 
