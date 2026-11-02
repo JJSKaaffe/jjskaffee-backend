@@ -33,6 +33,7 @@ Scripts en `db/` (se corren a mano en pgAdmin y en CI, en orden). No hay herrami
 - `08_seed_multicafeteria.sql`: Laura también es CAJERO en la cafetería B.
 - `09_ingresos_libres.sql`: tabla `ingreso_libre` (RLS forzado, FK compuestas, idempotencia, borrado lógico) y `v_movimiento` con los ingresos libres como INGRESO.
 - `10_seed_categorias_ingreso.sql`: dos categorías de INGRESO activas y una archivada en la cafetería A.
+- `11_seed_menu_demo.sql`: **datos de demostración, no corren en el CI.** Menú completo e igual en A y B (4 categorías de menú, 14 productos base, 8 adiciones con sus combinaciones) y las categorías de ingreso de A también en B. Idempotente (salta lo que ya existe por cafetería y nombre) y fija `app.current_cafeteria` por transacción, así que corre en Cloud SQL sin quitar el `FORCE` (guía `gcp.md`, paso 4.4). No va en el CI porque `CatalogoDeVentaIT` espera el catálogo exacto de `db/03` y `db/10` (en B solo el Capuchino y ninguna categoría de ingreso; el latte de A solo con almendra y shot): con db/11 cargado, `./mvnw verify` falla en esa base. Las pruebas `*IT` se corren contra una base sin db/11.
 - Un script nuevo de BD se agrega a esta lista y a `.github/workflows/seguridad.yml` en la misma fase en que se crea.
 
 Los nombres de tabla siguen el MER del equipo. La tabla `usuarios` guarda **membresías**: una fila por persona y cafetería, con su rol (UNIQUE `(id_cafeteria, firebase_uid)`). Las tablas de catálogo, `usuarios` y `cafeteria` son de solo lectura para la app; no hay `DELETE` en ninguna tabla.
