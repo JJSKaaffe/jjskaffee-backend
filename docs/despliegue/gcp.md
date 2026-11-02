@@ -214,6 +214,37 @@ gcloud sql instances describe jjskaffee-db --format="value(settings.ipConfigurat
 # gcloud sql instances patch jjskaffee-db --clear-authorized-networks
 ```
 
+### 4.4 Menú de demostración (opcional, para la sustentación)
+
+`db/11_seed_menu_demo.sql` deja el mismo menú completo en las cafeterías A y B: categorías Bebidas calientes, Bebidas frías, Panadería y Postres; 14 productos base y 8 adiciones con precios en pesos y sus combinaciones; y en B las categorías de ingreso que A ya tiene. Son **datos de demostración, no de prueba**: no corren en el CI y no forman parte del 4.2 (con ellos, `./mvnw verify` falla en `CatalogoDeVentaIT`, que espera el catálogo exacto de `db/03` y `db/10`).
+
+No hace falta quitar el `FORCE` del RLS: el script fija `app.current_cafeteria` al inicio de la transacción de cada cafetería, como el 4.3. Se puede correr en cualquier momento después del 4.2, también con el backend ya desplegado, y las veces que sea: lo que ya existe (mismo nombre en la misma cafetería) no se vuelve a insertar. No hay script para deshacerlo (nadie tiene `DELETE`): para volver al catálogo de prueba hay que recrear la base.
+
+**Cloud Shell**, con el Cloud SQL Auth Proxy (`cloud-sql-proxy`, ya instalado en Cloud Shell). Se conecta con tu identidad de Google, así que no autoriza ninguna IP en la instancia:
+
+```bash
+cd ~/jjskaffee-backend
+git fetch && git checkout <rama o commit que tenga db/11>
+
+# El proxy queda escuchando en 127.0.0.1:5432 (en segundo plano)
+cloud-sql-proxy jjskafee:us-east1:jjskaffee-db --port 5432 &
+
+# Pide la clave de postgres del paso 3. Al final muestra el resumen por cafetería
+PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres psql -v ON_ERROR_STOP=1 -d jjskaffee -f db/11_seed_menu_demo.sql
+
+# Cerrar el proxy
+kill %1
+```
+
+El resumen final debe mostrar, en A y en B, 14 productos base, 8 adiciones, 29 combinaciones y 2 categorías de ingreso; categorías de menú, 4 en A y 5 en B (B conserva su categoría "Bebidas" de `db/03`, con el Capuchino). En la primera corrida aparece un `NOTICE: schema "pg_temp" does not exist, skipping`: es normal (el script borra sus tablas temporales por si quedaron de una corrida anterior).
+
+**En local**, con el usuario `postgres` sobre la base `jjskaffee` (después de `db/10`):
+
+- **pgAdmin**: Query Tool sobre `jjskaffee`, abrir `db/11_seed_menu_demo.sql` y ejecutar todo con F5. La pestaña de resultados muestra el resumen.
+- **psql**: `psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d jjskaffee -f db/11_seed_menu_demo.sql`
+
+Si después quieres correr `./mvnw verify` en local, hazlo contra una base sin `db/11` (otra base creada con `db/01` a `db/10`, o recrear `jjskaffee`).
+
 ## 5. Artifact Registry y la imagen
 
 ```powershell
