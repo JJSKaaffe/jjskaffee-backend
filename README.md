@@ -17,6 +17,7 @@ API REST del sistema de gestión financiera **multi-tenant** para cafeterías pe
 | [`Dockerfile`](Dockerfile) | Imagen del backend para Cloud Run: compila con el Maven wrapper y corre con Temurin 27 (JRE) como usuario sin privilegios |
 | [`infra/api-gateway`](infra/api-gateway/openapi.yaml) | Configuración del API Gateway (OpenAPI 2.0); despliegue en [`docs/despliegue/api-gateway.md`](docs/despliegue/api-gateway.md) |
 | [`infra/waf`](infra/waf) | Scripts para crear y borrar el WAF (Cloud Armor + balanceador); guía en [`docs/despliegue/waf.md`](docs/despliegue/waf.md) |
+| [`docs/pruebas`](docs/pruebas/registro-de-pruebas.md) | Registro de pruebas contra el despliegue: script automático [`infra/pruebas/pruebas-nube.ps1`](infra/pruebas/pruebas-nube.ps1) con sus resultados y pruebas manuales en el navegador |
 
 ## Arquitectura
 
