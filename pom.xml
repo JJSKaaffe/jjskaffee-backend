@@ -35,7 +35,7 @@
         <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <firebase-admin.version>9.11.0</firebase-admin.version>
         <!-- Guava lo trae firebase-admin (33.6.0-jre): CVE-2026-102554. Spring Boot no la maneja: ver dependencyManagement -->
-        <guava.version>33.7.2-jre</guava.version>
+        <guava.version>33.8.0-jre</guava.version>
         <!-- Conector de Cloud SQL (ADR-0012, ADR-0014): solo lo usa el perfil gcp, vía JJSKAFFEE_DB_URL -->
         <cloud-sql-socket-factory.version>1.30.2</cloud-sql-socket-factory.version>
     </properties>
